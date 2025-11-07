@@ -1,0 +1,541 @@
+<div class="task-detail-container">
+  <div *ngIf="isLoading" class="loading">読み込み中...</div>
+  
+  <div *ngIf="!isLoading && task" class="task-detail-card">
+    <!-- ヘッダー -->
+    <div class="header">
+      <button class="back-btn" (click)="goBack()">← 戻る</button>
+      <div class="header-actions">
+        <button *ngIf="!isEditing && canEdit" class="edit-btn" (click)="toggleEdit()">編集</button>
+        <button *ngIf="!isEditing" class="duplicate-btn" (click)="onDuplicate()">複製</button>
+        <button *ngIf="!isEditing && canDelete" class="delete-btn" (click)="onDelete()">削除</button>
+      </div>
+    </div>
+
+    <!-- 表示モード -->
+    <div *ngIf="!isEditing" class="view-mode">
+      <h1>{{ task.title }}</h1>
+      <div class="task-info">
+        <div class="info-item" *ngIf="task.projectName || projectName">
+          <span class="label">プロジェクト:</span>
+          <span>{{ projectName || task.projectName }}</span>
+        </div>
+        <div class="info-item" *ngIf="task.teamName || teamName">
+          <span class="label">チーム:</span>
+          <span>{{ teamName || task.teamName }}</span>
+        </div>
+        <div class="info-item" *ngIf="task.assigneeName">
+          <span class="label">担当者:</span>
+          <span>{{ task.assigneeName }}</span>
+        </div>
+        <div class="info-item">
+          <span class="label">ステータス:</span>
+          <span class="status-badge status-{{ task.status }}">{{ getStatusLabel(task.status) }}</span>
+        </div>
+        <div class="info-item">
+          <span class="label">優先度:</span>
+          <span class="priority-badge priority-{{ task.priority }}">{{ getPriorityLabel(task.priority) }}</span>
+        </div>
+        <div class="info-item">
+          <span class="label">開始日:</span>
+          <span>{{ formatDate(task.startDate) }}</span>
+        </div>
+        <div class="info-item">
+          <span class="label">期限:</span>
+          <span>{{ formatDate(task.endDate) }}</span>
+        </div>
+        <div class="info-item" *ngIf="task.description">
+          <span class="label">説明:</span>
+          <p>{{ task.description }}</p>
+        </div>
+        <div class="info-item" *ngIf="task.memo">
+          <span class="label">メモ:</span>
+          <p>{{ task.memo }}</p>
+        </div>
+        <div class="info-item" *ngIf="task.reminders && task.reminders.length > 0">
+          <span class="label">リマインダー:</span>
+          <div class="reminders-list">
+            <div *ngFor="let reminder of task.reminders" class="reminder-item">
+              <span *ngIf="reminder.type === 'before_start'" class="reminder-info">
+                開始前: {{ formatReminderTime(reminder) }}前
+              </span>
+              <span *ngIf="reminder.type === 'before_end'" class="reminder-info">
+                期限前: {{ formatReminderTime(reminder) }}前
+              </span>
+              <span *ngIf="reminder.scheduledAt" class="reminder-info">
+                カスタム: {{ formatDateTime(reminder.scheduledAt) }}
+              </span>
+              <span *ngIf="reminder.sent" class="reminder-sent">✓ 送信済み</span>
+              <span *ngIf="reminder.sentAt" class="reminder-sent-at">
+                ({{ formatDateTime(reminder.sentAt) }})
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="info-item">
+          <span class="label">作業時間:</span>
+          <span>{{ formatWorkTime(task.totalWorkTime) }}</span>
+          <button class="details-btn" (click)="toggleWorkTimeDetails()">
+            {{ showWorkTimeDetails ? '詳細を閉じる' : '詳細' }}
+          </button>
+        </div>
+
+        <!-- 作業時間詳細セクション -->
+        <div *ngIf="showWorkTimeDetails" class="work-time-details">
+          <h4>作業時間詳細</h4>
+          <table class="work-sessions-table" *ngIf="task.workSessions && task.workSessions.length > 0">
+            <thead>
+              <tr>
+                <th>開始時間</th>
+                <th>終了時間</th>
+                <th>休憩時間（分）</th>
+                <th>実働時間</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <ng-container *ngFor="let session of task.workSessions">
+                <!-- 編集モード -->
+                <tr *ngIf="editingSessionId === session.id" [formGroup]="editSessionForm" class="editing">
+                  <td>
+                    <input type="datetime-local" formControlName="startTime">
+                  </td>
+                  <td>
+                    <input type="datetime-local" formControlName="endTime">
+                  </td>
+                  <td>
+                    <input type="number" formControlName="breakDuration" min="0">
+                  </td>
+                  <td>{{ formatWorkTime(calculateActualDuration()) }}</td>
+                  <td>
+                    <button class="save-btn" (click)="saveSessionEdit()">保存</button>
+                    <button class="cancel-btn" (click)="cancelSessionEdit()">キャンセル</button>
+                  </td>
+                </tr>
+                <!-- 表示モード -->
+                <tr *ngIf="editingSessionId !== session.id">
+                  <td>{{ formatDateTime(session.startTime) }}</td>
+                  <td>{{ session.endTime ? formatDateTime(session.endTime) : '-' }}</td>
+                  <td>{{ session.breakDuration }}分</td>
+                  <td>{{ formatWorkTime(session.actualDuration) }}</td>
+                  <td>
+                    <button class="edit-session-btn" (click)="startEditSession(session)">修正</button>
+                    <button class="view-log-btn" (click)="viewSessionChangeLog(session.id)" *ngIf="session.changeLogs && session.changeLogs.length > 0">変更ログ</button>
+                  </td>
+                </tr>
+              </ng-container>
+              <!-- 新規セッション追加行 -->
+              <tr *ngIf="addingNewSession" class="adding" [formGroup]="newSessionForm">
+                <td>
+                  <input type="datetime-local" formControlName="startTime">
+                </td>
+                <td>
+                  <input type="datetime-local" formControlName="endTime">
+                </td>
+                <td>
+                  <input type="number" formControlName="breakDuration" min="0">
+                </td>
+                <td>{{ formatWorkTime(calculateNewSessionDuration()) }}</td>
+                <td>
+                  <button class="save-btn" (click)="saveNewSession()">保存</button>
+                  <button class="cancel-btn" (click)="cancelNewSession()">キャンセル</button>
+                </td>
+              </tr>
+              <!-- 追加ボタン行 -->
+              <tr class="add-session-row">
+                <td colspan="5">
+                  <button class="add-session-btn" (click)="startAddNewSession()" *ngIf="!addingNewSession">作業時間を追加</button>
+                </td>
+              </tr>
+              <tr class="total-row">
+                <td colspan="3"><strong>合計作業時間</strong></td>
+                <td><strong>{{ formatWorkTime(getTotalWorkTime()) }}</strong></td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+          
+          <!-- 作業セッションがない場合の表示 -->
+          <div *ngIf="!task.workSessions || task.workSessions.length === 0" class="no-sessions">
+            <p>作業セッションがありません</p>
+            <button class="add-session-btn" (click)="startAddNewSession()" *ngIf="!addingNewSession">作業時間を追加</button>
+            <div *ngIf="addingNewSession" class="add-session-form">
+              <table class="work-sessions-table">
+                <thead>
+                  <tr>
+                    <th>開始時間</th>
+                    <th>終了時間</th>
+                    <th>休憩時間（分）</th>
+                    <th>実働時間</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="adding" [formGroup]="newSessionForm">
+                    <td>
+                      <input type="datetime-local" formControlName="startTime">
+                    </td>
+                    <td>
+                      <input type="datetime-local" formControlName="endTime">
+                    </td>
+                    <td>
+                      <input type="number" formControlName="breakDuration" min="0">
+                    </td>
+                    <td>{{ formatWorkTime(calculateNewSessionDuration()) }}</td>
+                    <td>
+                      <button class="save-btn" (click)="saveNewSession()">保存</button>
+                      <button class="cancel-btn" (click)="cancelNewSession()">キャンセル</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- 変更ログモーダル -->
+        <div *ngIf="selectedSessionId" class="change-log-modal" (click)="closeChangeLogModal()">
+          <div class="modal-content" (click)="$event.stopPropagation()">
+            <h4>変更ログ</h4>
+            <table class="change-log-table">
+              <thead>
+                <tr>
+                  <th>変更日時</th>
+                  <th>変更者</th>
+                  <th>項目</th>
+                  <th>変更前</th>
+                  <th>変更後</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let log of getSessionChangeLogs(selectedSessionId)">
+                  <td>{{ formatDateTime(log.changedAt) }}</td>
+                  <td>{{ log.changedByName }}</td>
+                  <td>{{ getFieldLabel(log.field) }}</td>
+                  <td>{{ formatChangeValue(log.field, log.oldValue) }}</td>
+                  <td>{{ formatChangeValue(log.field, log.newValue) }}</td>
+                </tr>
+                <tr *ngIf="getSessionChangeLogs(selectedSessionId).length === 0">
+                  <td colspan="5" class="no-logs">変更ログはありません</td>
+                </tr>
+              </tbody>
+            </table>
+            <button class="close-modal-btn" (click)="closeChangeLogModal()">閉じる</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- サブタスク・進捗率セクション（showProgressがtrueの場合のみ表示） -->
+      <div class="subtasks-section" *ngIf="task.showProgress">
+        <h3>サブタスク・進捗率</h3>
+        <div class="progress-info">
+          <span>進捗: {{ getCompletedSubtasks() }} / {{ task.subtasks.length || 0 }}</span>
+          <span class="progress-percentage">{{ getProgressPercentage() }}%</span>
+          
+          <!-- 手動計算ボタン（初期表示、手動修正中でない場合のみ） -->
+          <div class="progress-manual-control" *ngIf="!showManualInput && !task.progressManual">
+            <button class="manual-calc-btn" (click)="showManualProgressInput()">手動計算</button>
+          </div>
+          
+          <!-- 手動修正中の場合の表示 -->
+          <div class="progress-manual-control" *ngIf="!showManualInput && task.progressManual">
+            <span class="manual-progress-indicator">
+              <span class="manual-label">手動修正中</span>
+              <button class="resume-auto-btn" (click)="resumeAutoProgress()">自動計算を再開</button>
+            </span>
+          </div>
+          
+          <!-- 手動入力欄（ボタンクリック後表示） -->
+          <div class="progress-manual-control" *ngIf="showManualInput">
+            <input 
+              type="number" 
+              min="0" 
+              max="100" 
+              [(ngModel)]="manualProgressValue"
+              class="progress-input"
+              placeholder="手動入力">
+            <span class="percent-symbol">%</span>
+            <button class="confirm-btn" (click)="onManualProgressChange(manualProgressValue)">決定</button>
+            <button class="cancel-manual-btn" (click)="cancelManualProgressInput()">キャンセル</button>
+          </div>
+        </div>
+        
+        <ul class="subtask-list">
+          <li *ngFor="let subtask of task.subtasks; let i = index" class="subtask-item" [class.completed]="subtask.completed">
+            <input 
+              type="checkbox" 
+              [checked]="subtask.completed"
+              (change)="toggleSubtask(subtask.id, i)">
+            <span class="subtask-title">{{ subtask.title }}</span>
+            <button class="delete-subtask-btn" (click)="deleteSubtask(subtask.id)">削除</button>
+          </li>
+        </ul>
+
+        <!-- サブタスク追加 -->
+        <div class="add-subtask" *ngIf="task.showProgress">
+          <input 
+            type="text" 
+            [(ngModel)]="newSubtaskTitle"
+            placeholder="サブタスクを追加..."
+            (keyup.enter)="addSubtask()">
+          <button (click)="addSubtask()">追加</button>
+        </div>
+      </div>
+
+      <div class="timer-section" *ngIf="!isFromArchive">
+        <button class="timer-btn" (click)="startTimer()">⏱️ 作業時間計測開始</button>
+      </div>
+
+      <!-- コメントセクション -->
+      <div class="comments-section">
+        <div class="comments-header">
+          <h3>コメント</h3>
+          <button class="toggle-comments-btn" (click)="toggleCommentsTab()">
+            {{ showCommentsTab ? '閉じる' : '開く' }}
+          </button>
+        </div>
+
+        <div *ngIf="showCommentsTab" class="comments-content">
+          <!-- コメント追加フォーム -->
+          <div class="add-comment">
+            <textarea 
+              [(ngModel)]="newCommentContent"
+              placeholder="コメントを追加..."
+              rows="3"></textarea>
+            <button (click)="addComment()">コメント追加</button>
+          </div>
+
+          <!-- コメント一覧 -->
+          <div class="comments-list" *ngIf="task.comments && task.comments.length > 0">
+            <div *ngFor="let comment of sortedComments" class="comment-item">
+              <div class="comment-header">
+                <span class="comment-author">{{ comment.userName }}</span>
+                <span class="comment-date">{{ formatDateTime(comment.createdAt) }}</span>
+              </div>
+              <div class="comment-content">{{ comment.content }}</div>
+            </div>
+          </div>
+          <div *ngIf="!task.comments || task.comments.length === 0" class="no-comments">
+            コメントはまだありません
+          </div>
+        </div>
+      </div>
+
+      <!-- ファイルセクション -->
+      <div class="files-section" *ngIf="!isFromArchive">
+        <h3>ファイル</h3>
+        
+        <div class="file-upload">
+          <input 
+            type="file" 
+            multiple 
+            (change)="onFileSelected($event)"
+            id="fileInput"
+            style="display: none;">
+          <label for="fileInput" class="file-input-label">
+            📎 ファイルを選択
+          </label>
+          <button 
+            (click)="uploadFiles()" 
+            [disabled]="selectedFiles.length === 0 || isUploadingFiles"
+            class="upload-btn">
+            {{ isUploadingFiles ? 'アップロード中...' : 'アップロード' }}
+          </button>
+          <div *ngIf="selectedFiles.length > 0" class="selected-files">
+            選択済み: {{ selectedFiles.length }}個のファイル
+          </div>
+        </div>
+
+        <div class="files-list" *ngIf="task.files && task.files.length > 0">
+          <div *ngFor="let file of task.files" class="file-item">
+            <span class="file-name">{{ file.name }}</span>
+            <div class="file-actions">
+              <button class="download-btn" (click)="downloadFile(file.url, file.name)">ダウンロード</button>
+              <button class="delete-file-btn" (click)="deleteFile(file.id)">削除</button>
+            </div>
+          </div>
+        </div>
+        <div *ngIf="!task.files || task.files.length === 0" class="no-files">
+          ファイルはまだありません
+        </div>
+      </div>
+      
+      <!-- アーカイブから来た場合のファイル表示（読み取り専用） -->
+      <div class="files-section" *ngIf="isFromArchive">
+        <h3>ファイル</h3>
+        <div class="files-list" *ngIf="task.files && task.files.length > 0">
+          <div *ngFor="let file of task.files" class="file-item">
+            <span class="file-name">{{ file.name }}</span>
+            <div class="file-actions">
+              <button class="download-btn" (click)="downloadFile(file.url, file.name)">ダウンロード</button>
+            </div>
+          </div>
+        </div>
+        <div *ngIf="!task.files || task.files.length === 0" class="no-files">
+          ファイルはまだありません
+        </div>
+      </div>
+    </div>
+
+    <!-- 編集モード -->
+    <div *ngIf="isEditing" class="edit-mode">
+      <form [formGroup]="editForm" (ngSubmit)="onSave()">
+        <div class="form-group">
+          <label for="title">タイトル</label>
+          <input type="text" id="title" formControlName="title">
+        </div>
+
+        <div class="form-group">
+          <label for="description">説明</label>
+          <textarea id="description" formControlName="description" rows="4"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="memo">メモ</label>
+          <textarea id="memo" formControlName="memo" rows="3"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="status">ステータス</label>
+          <select id="status" formControlName="status">
+            <option value="not_started">未着手</option>
+            <option value="in_progress">進行中</option>
+            <option value="completed">完了</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="priority">優先度</label>
+          <select id="priority" formControlName="priority">
+            <option value="important">重要</option>
+            <option value="normal">普通</option>
+            <option value="low">低め</option>
+            <option value="none">なし</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="startDate">開始日</label>
+            <input type="date" id="startDate" formControlName="startDate">
+          </div>
+
+          <div class="form-group">
+            <label for="startTime">開始時間（任意）</label>
+            <input type="time" id="startTime" formControlName="startTime">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="endDate">期限</label>
+            <input type="date" id="endDate" formControlName="endDate">
+          </div>
+
+          <div class="form-group">
+            <label for="endTime">終了時間（任意）</label>
+            <input type="time" id="endTime" formControlName="endTime">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="assigneeId">担当者（オプション）</label>
+          <select id="assigneeId" formControlName="assigneeId">
+            <option value="">担当者なし</option>
+            <option *ngFor="let user of users" [value]="user.id">
+              {{ user.displayName || user.email }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="projectId">プロジェクト</label>
+          <select id="projectId" formControlName="projectId">
+            <option value="">プロジェクトなし</option>
+            <option *ngFor="let project of projects" [value]="project.id">
+              {{ project.name }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>
+            <input type="checkbox" formControlName="showProgress"> 進捗率を表示する
+          </label>
+          <small class="form-hint">※ 進捗率を表示する場合のみサブタスクが利用可能です</small>
+        </div>
+
+        <!-- リマインダー設定 -->
+        <div class="form-group">
+          <h3>リマインダー設定</h3>
+        </div>
+
+        <!-- 開始前のリマインダー -->
+        <div class="form-group">
+          <label>
+            <input type="checkbox" formControlName="enableStartReminder"> 開始前のリマインダーを設定
+          </label>
+        </div>
+
+        <div class="form-group" *ngIf="editForm.get('enableStartReminder')?.value">
+          <label for="startReminderType">開始前のリマインダー</label>
+          <select id="startReminderType" formControlName="startReminderType">
+            <option value="1day">1日前</option>
+            <option value="3hour">3時間前</option>
+            <option value="1hour">1時間前</option>
+            <option value="30min">30分前</option>
+            <option value="15min">15分前</option>
+            <option value="10min">10分前</option>
+            <option value="5min">5分前</option>
+            <option value="1min">1分前</option>
+          </select>
+        </div>
+
+        <!-- 期限前のリマインダー -->
+        <div class="form-group">
+          <label>
+            <input type="checkbox" formControlName="enableEndReminder"> 期限前のリマインダーを設定
+          </label>
+        </div>
+
+        <div class="form-group" *ngIf="editForm.get('enableEndReminder')?.value">
+          <label for="endReminderType">期限前のリマインダー</label>
+          <select id="endReminderType" formControlName="endReminderType">
+            <option value="1day">1日前</option>
+            <option value="3hour">3時間前</option>
+            <option value="1hour">1時間前</option>
+            <option value="30min">30分前</option>
+            <option value="15min">15分前</option>
+            <option value="10min">10分前</option>
+            <option value="5min">5分前</option>
+            <option value="1min">1分前</option>
+          </select>
+        </div>
+
+        <!-- カスタム設定のリマインダー -->
+        <div class="form-group">
+          <label>
+            <input type="checkbox" formControlName="enableCustomReminder"> カスタム設定でリマインダーを設定
+          </label>
+        </div>
+
+        <div class="form-group" *ngIf="editForm.get('enableCustomReminder')?.value">
+          <label for="customReminderDateTime">リマインダー日時</label>
+          <input type="datetime-local" id="customReminderDateTime" formControlName="customReminderDateTime">
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="cancel-btn" (click)="toggleEdit()">キャンセル</button>
+          <button type="submit" class="save-btn" [disabled]="editForm.invalid">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 次やるタスクモーダル -->
+<app-next-task-candidates
+  [showModal]="showNextTaskCandidates"
+  (closeModal)="showNextTaskCandidates = false">
+</app-next-task-candidates>
+

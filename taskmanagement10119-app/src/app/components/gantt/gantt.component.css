@@ -1,0 +1,920 @@
+.gantt-container {
+  min-height: 100vh;
+  background: var(--gradient-background);
+}
+
+.gantt-header {
+  background: var(--gradient-primary);
+  padding: 0.75rem var(--spacing-xl);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: fixed;
+  top: 0;
+  left: 250px; /* デフォルト値 */
+  right: 0;
+  z-index: 100;
+  transition: left 0.3s ease;
+}
+
+/* サイドバーが閉じている場合 */
+:host-context(.app-container.sidebar-closed) .gantt-header {
+  left: 0;
+}
+
+/* モバイルではサイドバーが閉じている前提で左から0 */
+@media (max-width: 768px) {
+  .gantt-header {
+    left: 0;
+  }
+}
+
+.gantt-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.gantt-header h1 {
+  margin: 0;
+  color: white;
+  font-size: 1.8rem;
+}
+
+.gantt-header-right {
+  display: flex;
+  align-items: center;
+}
+
+.main-content {
+  padding-top: 4rem;
+}
+
+.gantt-card {
+  background: var(--color-surface);
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+  margin: var(--spacing-md);
+}
+
+
+
+.view-mode-switcher {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.mode-btn {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 2px solid var(--color-primary);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.mode-btn:hover {
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.mode-btn.active {
+  background: var(--color-primary);
+  color: white;
+}
+
+.back-btn {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+}
+
+.back-btn:hover {
+  background: var(--color-primary-dark);
+}
+
+.date-range-info {
+  padding: 1rem;
+  background: #f5f5f5;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.date-range-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.date-range-info p {
+  margin: 0;
+  color: #666;
+}
+
+.change-date-btn, .reset-date-btn {
+  padding: 0.5rem 1rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.change-date-btn:hover, .reset-date-btn:hover {
+  background: #5568d3;
+}
+
+.date-picker {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 8px;
+}
+
+.date-inputs {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.date-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.date-input-group label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #666;
+}
+
+.date-input-group input {
+  padding: 0.5rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+
+.date-input-group input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.reset-date-btn {
+  background: #999;
+  align-self: flex-end;
+  margin-left: auto;
+}
+
+.reset-date-btn:hover {
+  background: #777;
+}
+
+.display-period-selector {
+  display: flex;
+  align-items: left;
+  gap: 0.5rem;
+}
+
+.display-period-selector label {
+  font-weight: 600;
+  color: #333;
+}
+
+.display-period-selector select {
+  padding: 0.5rem 1rem;
+  border: 1px solid #667eea;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #333;
+  transition: all 0.2s;
+}
+
+.display-period-selector select:hover {
+  border-color: #5568d3;
+  background: #f0f4ff;
+}
+
+.gantt-nav-controls {
+  display: flex;
+  padding: 1rem;
+  background: #f9f9f9;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.period-change-container {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.nav-btn {
+  padding: 0.5rem 1rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+  margin: 0 0.5rem;
+}
+
+.nav-btn:hover {
+  background: #5568d3;
+}
+
+.nav-btn:active {
+  transform: translateY(1px);
+}
+
+.legend {
+  display: flex;
+  gap: 2rem;
+  padding: 0.5rem;
+  background: #f9f9f9;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.gantt-chart-wrapper {
+  overflow-x: auto;
+  overflow-y: visible;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fafafa;
+  position: relative;
+}
+
+/*.gantt-scroll-area {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 1px;
+  pointer-events: none;
+  opacity: 0;
+}*/
+
+.gantt-chart {
+  display: grid;
+  padding: 0rem;
+  overflow: visible;
+  position: relative;
+}
+
+.gantt-date-dividers {
+  position: absolute;
+  left: 250px; /* タスクラベル列の幅 */
+  top: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.date-divider-line {
+  position: absolute;
+  top: 40px; /* ヘッダー行の高さ分下げる */
+  bottom: 0;
+  width: 1px;
+  background-color: #747474;
+}
+
+.gantt-header-row {
+  background: #f5f5f5;
+  border-bottom: 2px solid #e0e0e0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+}
+
+.task-label-header {
+  flex: 0 0 250px;
+  font-weight: 600;
+  color: #666;
+  padding: 0.5rem;
+  background: white;
+  border-right: 2px solid #e0e0e0;
+  position: sticky;
+  left: 0rem;
+  z-index: 15;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+.date-columns-container {
+  display: flex;
+  flex: 1;
+  overflow-x: visible;
+  min-width: 0;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.date-column {
+  flex: 1 1 0;
+  min-width: 30px;
+  text-align: center;
+  padding: 0.25rem;
+  border-right: 1px solid #e0e0e0;
+  font-size: 0.75rem;
+  color: #666;
+  position: relative;
+}
+
+/*.date-column:nth-child(7n) {
+  border-right: 2px solid #667eea;
+}*/
+
+/* border-right を全行に拡張 */
+.date-column::after {
+  content: '';
+  position: absolute;
+  right: -1px; /* border-right の位置 */
+  top: 40px; /* ヘッダー行の下から */
+  bottom: -1000px; /* 十分下まで */
+  width: 1px;
+  background-color: #747474;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.date-label {
+  display: block;
+  font-weight: 600;
+}
+
+
+.gantt-row {
+  display: flex;
+  align-items: stretch;
+  margin-bottom: 0.5rem;
+  min-height: 40px;
+  position: relative;
+  overflow-x: visible;
+}
+
+.gantt-row:last-child {
+  margin-bottom: 0;
+}
+
+.task-label {
+  flex: 0 0 250px;
+  display: flex;
+  align-items: center;
+  padding: 0.5rem;
+  background: white;
+  border-right: 2px solid #e0e0e0;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+  position: sticky;
+  left: 0rem;
+  z-index: 5;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+.task-label:hover {
+  background: #f5f5f5;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 0.75rem;
+}
+
+.task-title {
+  flex: 1;
+  color: #333;
+  font-weight: 600;
+}
+
+.no-tasks-label {
+  color: #999;
+  font-style: italic;
+}
+
+.task-date {
+  font-size: 0.875rem;
+  color: #999;
+  margin-left: 0.5rem;
+}
+
+.date-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: #747474;
+  pointer-events: none;
+}
+
+.gantt-bar-container {
+  position: relative;
+  display: flex;
+  height: 50px;
+  background: #fafafa;
+  border-left: 1px solid #e0e0e0;
+  overflow: visible;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+
+
+.gantt-bar {
+  height: 40px;
+  border-radius: 0;
+  margin-top: 5px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.gantt-bar-spacer {
+  /* 残りのスペースを埋める要素（透明） */
+  flex-shrink: 0;
+}
+
+.gantt-bar:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.bar-duration {
+  color: white;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.loading, .no-tasks {
+  text-align: center;
+  padding: 3rem;
+  color: #999;
+}
+
+/* CSS Grid 用のスタイル */
+.grid-task-label-header {
+  grid-column: 1;
+  font-weight: 600;
+  color: #666;
+  padding: 0.5rem;
+  background: white;
+  border-right: 2px solid #e0e0e0;
+  position: sticky;
+  left: 0;
+  z-index: 15;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+.grid-month-label-header {
+  grid-column: 1;
+  font-weight: 600;
+  color: #666;
+  padding: 0.5rem;
+  background: white;
+  border-right: 2px solid #e0e0e0;
+  position: sticky;
+  left: 0;
+  z-index: 15;
+}
+
+.grid-month-label {
+  text-align: center;
+  padding: 0.25rem;
+  font-size: 0.75rem;
+  color: #666;
+  position: relative;
+  background: #f5f5f5;
+}
+
+.grid-month-label-span {
+  position: relative;
+  padding: 0.25rem;
+  font-size: 0.75rem;
+  background: #f5f5f5;
+  border-top: 1px solid #e0e0e0;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid #e0e0e0;
+}
+
+/* 月の開始位置には常に左側の線を引く */
+/*.grid-month-label-span::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: #747474;
+  z-index: 1;
+  pointer-events: none;
+}*/
+
+/* 月の終了位置には右側の線を引く */
+/*.grid-month-label-span.month-end::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: #747474;
+  z-index: 1;
+  pointer-events: none;
+}*/
+
+.month-label {
+  font-weight: 600;
+  color: #666;
+  z-index: 2;
+  position: relative;
+  padding-left: 0.5rem;
+}
+
+.grid-date-column {
+  text-align: center;
+  padding: 0.25rem;
+  border-right: 1px solid #e0e0e0;
+  font-size: 0.75rem;
+  color: #666;
+  position: relative;
+  background: #f5f5f5;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.grid-date-column.today {
+  background: #cfe8fc;
+  font-weight: bold;
+  color: #1976d2;
+}
+
+/*.grid-date-column:nth-child(7n+2) {
+  border-right: 2px solid #667eea;
+}*/
+
+/* 日付列の区切り線を全行に拡張 */
+.grid-date-column::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: 40px;
+  bottom: 0;
+  width: 1px;
+  background-color: #747474;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.grid-task-label {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  padding: 0.5rem;
+  background: white;
+  border-right: 2px solid #e0e0e0;
+  font-weight: 500;
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+  min-height: 50px;
+}
+
+.grid-task-label:hover {
+  background: #f5f5f5;
+}
+
+.grid-date-cell {
+  min-height: 50px;
+  padding: 0;
+  border-right: 1px solid #e0e0e0;
+  background: #fafafa;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.grid-date-cell.today {
+  background: #cfe8fc;
+}
+
+/*.grid-date-cell:nth-child(7n+2) {
+  border-right: 2px solid #667eea;
+}*/
+
+/*.grid-bar {
+  width: 100%;
+  height: 40px;
+  margin: 5px 0;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 0.5rem;
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}*/
+
+.grid-bar-overlay {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  height: 50px;
+  grid-row: auto;
+}
+
+.grid-bar-unified {
+  width: 100%;
+  height: 40px;
+  margin: 5px 0;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 0.5rem;
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  border-radius: 9px;  /* デフォルトで丸みあり */
+}
+
+/* 左端が範囲外の場合、左端の丸みをなくす */
+.grid-bar-unified.truncated-start {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+/* 右端が範囲外の場合、右端の丸みをなくす */
+.grid-bar-unified.truncated-end {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.grid-bar-unified:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  cursor: move;
+}
+
+.grid-bar-unified.dragging {
+  opacity: 0.7;
+  cursor: grabbing;
+}
+
+/* ドラッグハンドル */
+.drag-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  transition: background 0.2s;
+  display: none;
+}
+
+.grid-bar-unified:hover .drag-handle {
+  display: block;
+}
+
+.drag-handle:hover {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(255, 255, 255, 0.8);
+}
+
+.drag-handle-start {
+  left: 0;
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+
+.drag-handle-end {
+  right: 0;
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+/* 日付編集ダイアログ */
+.date-edit-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.date-edit-dialog {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  min-width: 400px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.date-edit-dialog h3 {
+  margin: 0 0 1.5rem 0;
+  color: #333;
+  font-size: 1.5rem;
+}
+
+.dialog-content {
+  margin-bottom: 1.5rem;
+}
+
+.dialog-content .form-group {
+  margin-bottom: 1rem;
+}
+
+.dialog-content label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #666;
+}
+
+.dialog-content input[type="date"] {
+  width: 100%;
+  padding: 0.5rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.dialog-content input[type="date"]:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.btn-cancel,
+.btn-confirm {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-cancel {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.btn-cancel:hover {
+  background: #d0d0d0;
+}
+
+.btn-confirm {
+  background: #667eea;
+  color: white;
+}
+
+.btn-confirm:hover {
+  background: #5568d3;
+}
+
+.bar-duration {
+  color: white;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* ツールチップ */
+.task-tooltip {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  background: white;
+  border: 2px solid #667eea;
+  border-radius: 8px;
+  padding: 0.75rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 250px;
+  max-width: 350px;
+  transform: translateX(-50%) translateY(-100%); /* 中央揃え + 上に配置 */
+  margin-bottom: 10px; /* バーとの間隔 */
+}
+
+/* 吹き出しの矢印（下向き） */
+.task-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 10px solid #667eea;
+}
+
+.task-tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 10px solid white;
+  z-index: 1;
+}
+
+.tooltip-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tooltip-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.tooltip-label {
+  font-weight: 600;
+  color: #666;
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.tooltip-value {
+  color: #333;
+  flex: 1;
+  word-break: break-word;
+}
+
+/*.grid-bar.bar-start {
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+
+.grid-bar.bar-end {
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}*/
+

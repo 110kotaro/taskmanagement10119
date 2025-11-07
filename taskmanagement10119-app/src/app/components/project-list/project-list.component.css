@@ -1,0 +1,145 @@
+.project-list-container {
+  min-height: 100vh;
+  background: var(--color-background);
+}
+
+.header {
+  background: var(--gradient-primary);
+  padding: var(--spacing-md) var(--spacing-xl);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: var(--shadow-md);
+  position: fixed;
+  top: 0;
+  left: 250px; /* デフォルト値 */
+  right: 0;
+  z-index: 100;
+  transition: left 0.3s ease;
+}
+
+/* サイドバーが閉じている場合 */
+:host-context(.app-container.sidebar-closed) .header {
+  left: 0;
+}
+
+/* モバイルではサイドバーが閉じている前提で左から0 */
+@media (max-width: 768px) {
+  .header {
+    left: 0;
+  }
+}
+
+.header h1 {
+  color: white;
+  margin: 0;
+}
+
+.back-btn, .create-btn {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: white;
+  color: var(--color-primary);
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.back-btn:hover, .create-btn:hover {
+  background: var(--color-surface);
+}
+
+.main-content {
+  max-width: 1200px;
+  margin: var(--spacing-xl) auto;
+  padding: 0 var(--spacing-xl);
+  padding-top: 4rem;
+}
+
+.project-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--spacing-xl);
+}
+
+.project-card {
+  background: var(--color-surface);
+  padding: var(--spacing-xl);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.project-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+.project-card h2 {
+  margin: 0 0 var(--spacing-md) 0;
+  color: var(--color-text);
+}
+
+.project-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.label {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  min-width: 70px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  transition: width 0.3s;
+}
+
+.loading, .no-projects {
+  text-align: center;
+  padding: 3rem;
+  color: var(--color-text-secondary);
+}
+
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.status-not_started {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.status-in_progress {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+.status-completed {
+  background: #e8f5e9;
+  color: #388e3c;
+}
+

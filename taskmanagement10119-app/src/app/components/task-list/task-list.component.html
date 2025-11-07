@@ -1,0 +1,211 @@
+<div class="task-list-container">
+    <!--ヘッダー部分-->
+    <header class="header">
+        <div class="header-left">
+            <button class="back-btn" (click)="goBack()">← 戻る</button>
+            <h1>タスク一覧</h1>
+        </div>
+        <div class="header-right">
+            <!-- 表示モード切り替えボタン -->
+            <div class="view-mode-selector">
+                <button 
+                    class="view-mode-btn" 
+                    [class.active]="viewMode === 'card'"
+                    (click)="switchViewMode('card')"
+                    title="カード表示">
+                    📋
+                </button>
+                <button 
+                    class="view-mode-btn" 
+                    [class.active]="viewMode === 'table'"
+                    (click)="switchViewMode('table')"
+                    title="リスト表示">
+                    📊
+                </button>
+            </div>
+            <button class="create-btn" (click)="openCreateTaskModal()">+ タスク作成</button>
+        </div>
+    </header>
+
+    <!--メイン表示-->
+    <main class="main-content">
+        <!--フィルター・ソートセクション-->
+        <div *ngIf="!isLoading" class="filter-sort-section">
+            <div *ngIf="viewMode === 'table'" class="filter-group">
+                <label>ステータス:</label>
+                <select [(ngModel)]="statusFilter" (change)="onStatusFilterChange(statusFilter)">
+                    <option value="all">すべて</option>
+                    <option value="not_started">未着手</option>
+                    <option value="in_progress">進行中</option>
+                    <option value="overdue">期限切れ</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label>優先度:</label>
+                <select [(ngModel)]="priorityFilter" (change)="onPriorityFilterChange(priorityFilter)">
+                    <option value="all">すべて</option>
+                    <option value="important">重要</option>
+                    <option value="normal">普通</option>
+                    <option value="low">低め</option>
+                    <option value="none">なし</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label>タスクタイプ:</label>
+                <select [(ngModel)]="taskTypeFilter" (change)="onTaskTypeFilterChange(taskTypeFilter)">
+                    <option value="all">すべて</option>
+                    <option value="normal">通常</option>
+                    <option value="meeting">会議</option>
+                    <option value="regular">定期</option>
+                    <option value="project">プロジェクト</option>
+                    <option value="other">その他</option>
+                </select>
+            </div>
+            
+            <div class="sort-group">
+                <label>ソート:</label>
+                <select [value]="sortBy" (change)="onSortChange($any($event.target).value)">
+                    <option value="endDate">期限順</option>
+                    <option value="createdAt">登録日順</option>
+                    <option value="priority">重要度順</option>
+                    <option value="title">タイトル順</option>
+                </select>
+                <button class="sort-order-btn" (click)="toggleSortOrder()">
+                    {{ sortOrder === 'asc' ? '↑' : '↓' }}
+                </button>
+            </div>
+        </div>
+
+        <!--ローディング表示-->
+        <div *ngIf="isLoading" class="loading">
+            <div class="spinner"></div>
+            読み込み中...
+        </div>
+
+        <!--タスクがない場合-->
+        <div *ngIf="!isLoading && tasks.length === 0" class="no-tasks">
+            <div class="empty-state">
+                <h3>タスクがありません</h3>
+                <p>新しいタスクを作成してみましょう！</p>
+                <button class="create-btn" (click)="openCreateTaskModal()">+ 最初のタスクを作成</button>
+            </div>
+        </div>
+
+        <!--カード表示（デフォルト）-->
+        <div *ngIf="viewMode === 'card' && !isLoading && tasks.length > 0" class="task-groups-container">
+            <ng-container *ngFor="let groupKey of ['not_started', 'in_progress', 'overdue']">
+            <div class="task-group">
+                
+                <!--グループヘッダー-->
+                <div class="group-header" [style.border-left-color]="getGroupColor(groupKey)">
+                    <h3>{{ getGroupTitle(groupKey) }}</h3>
+                    <span class="task-count">{{ taskGroups[groupKey].length }}件</span>
+                </div>
+
+                <!--グループ内のタスク（ある場合）-->
+                <div class="group-tasks" *ngIf="taskGroups[groupKey].length > 0">
+                    <div *ngFor="let task of taskGroups[groupKey]" 
+                         class="task-card" 
+                         [class.overdue-start-date]="isOverdueStartDate(task)"
+                         [title]="isOverdueStartDate(task) ? '開始日が過ぎています' : ''"
+                         (click)="viewTaskDetail(task.id)">
+
+                        <!--タスクタイトル-->
+                        <h4 class="task-title">{{ task.title }}</h4>
+
+                        <!--チーム名（ある場合のみ）-->
+                        <p *ngIf="task.teamName" class="team-name">チーム: {{ task.teamName }}</p>
+
+                        <!--説明文（ある場合のみ）-->
+                        <p *ngIf="task.description" class="task-description">{{ task.description }}</p>
+
+                        <!--タスクメタ情報-->
+                        <div class="task-meta">
+                            <span class="due-date">期限: {{ formatDate(task.endDate) }}</span>
+                        </div>
+
+                        <!--プロジェクト情報（ある場合のみ）-->
+                        <div *ngIf="task.projectId" class="project-info-flex">
+                            <span class="project-info">
+                              📁 {{ task.projectName }}
+                            </span>
+                        </div>
+
+                        
+                    </div>
+                </div>
+
+                <!--グループ内にタスクがない場合-->
+                <div class="group-empty" *ngIf="taskGroups[groupKey].length === 0">
+                    <p class="empty-message">タスクがありません</p>
+                </div>
+            </div>
+            </ng-container>
+        </div>
+
+        <!--テーブル表示（オプション）-->
+        <div *ngIf="viewMode === 'table' && !isLoading && filteredTasks.length > 0" class="table-container">
+            <div class="table-actions" *ngIf="filteredTasks.length > 0">
+                <button class="select-all-btn" (click)="toggleAllTasks()">
+                    {{ selectedTasks.size === filteredTasks.length ? '全解除' : '全選択' }}
+                </button>
+                <button 
+                    *ngIf="selectedTasks.size > 0" 
+                    class="delete-selected-btn" 
+                    (click)="deleteSelectedTasks()">
+                    選択した{{ selectedTasks.size }}件を削除
+                </button>
+            </div>
+            <table class="task-table">
+                <thead>
+                    <tr>
+                        <th class="check-column"></th>
+                        <th>タイトル</th>
+                        <th>期限</th>
+                        <th>重要度</th>
+                        <th>担当</th>
+                        <th>ステータス</th>
+                        <th>作業時間</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr 
+                        *ngFor="let task of filteredTasks" 
+                        class="task-row"
+                        [class.overdue-start-date]="isOverdueStartDate(task)">
+                        <td class="check-column">
+                            <input 
+                                type="checkbox" 
+                                [checked]="selectedTasks.has(task.id)"
+                                (change)="toggleTaskSelection(task.id)"
+                                (click)="$event.stopPropagation()">
+                        </td>
+                        <td class="title-cell" (click)="viewTaskDetail(task.id)">
+                            <strong>{{ task.title }}</strong>
+                            <span *ngIf="task.teamName" class="team-name">（チーム: {{ task.teamName }}）</span>
+                        </td>
+                        <td>{{ formatDate(task.endDate) }}</td>
+                        <td>
+                            <span class="priority-badge" [ngClass]="'priority-' + task.priority">
+                                {{ getPriorityLabel(task.priority) }}
+                            </span>
+                        </td>
+                        <td>{{ getAssigneeName(task) }}</td>
+                        <td>
+                            <span class="status-badge" [ngClass]="'status-' + task.status">
+                                {{ getStatusLabel(task.status) }}
+                            </span>
+                        </td>
+                        <td>{{ formatWorkTime(task.totalWorkTime) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div *ngIf="filteredTasks.length === 0" class="no-tasks-table">
+                <p>タスクがありません</p>
+            </div>
+        </div>
+    </main>
+</div>

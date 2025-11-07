@@ -1,0 +1,38 @@
+<div class="modal-overlay" (click)="onCancel()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>終了日の変更</h3>
+      <button class="close-btn" (click)="onCancel()">×</button>
+    </div>
+    
+    <div class="modal-body">
+      <div class="task-info">
+        <p><strong>タスク:</strong> {{ task.title }}</p>
+        <p><strong>現在の終了日:</strong> {{ formatDate(task.endDate) }}</p>
+      </div>
+
+      <div class="form-group">
+        <label for="newEndDate">新しい終了日:</label>
+        <input 
+          type="date" 
+          id="newEndDate" 
+          [(ngModel)]="newEndDate" 
+          class="date-input"
+          [min]="getMinDate()"
+        >
+        <div *ngIf="errorMessage" class="error-message">
+          {{ errorMessage }}
+        </div>
+      </div>
+
+      <div class="buttons">
+        <button class="btn btn-primary" (click)="onSave()">
+          変更
+        </button>
+        <button class="btn btn-secondary" (click)="onCancel()">
+          キャンセル
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

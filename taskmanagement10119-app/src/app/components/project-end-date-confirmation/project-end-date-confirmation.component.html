@@ -1,0 +1,33 @@
+<div class="modal-overlay" (click)="onClose()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>終了日経過の確認</h3>
+      <button class="close-btn" (click)="onClose()">×</button>
+    </div>
+    
+    <div class="modal-body">
+      <div class="project-info">
+        <p><strong>プロジェクト:</strong> {{ project.name }}</p>
+        <p>
+          <strong>終了日:</strong> {{ formatDate(project.endDate) }}（経過しています）
+        </p>
+      </div>
+
+      <div class="action-buttons">
+        <p class="question">終了日を過ぎています。どうしますか？</p>
+        <div class="buttons">
+          <button class="btn btn-primary" (click)="onAction('complete')">
+            完了にする
+          </button>
+          <button class="btn btn-warning" (click)="onAction('extend')">
+            終了日を延長する
+          </button>
+          <button class="btn btn-secondary" (click)="onAction('ignore')">
+            無視
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+

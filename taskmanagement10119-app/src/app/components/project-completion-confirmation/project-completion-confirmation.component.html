@@ -1,0 +1,30 @@
+<div class="modal-overlay" (click)="onClose()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>プロジェクト完了確認</h3>
+      <button class="close-btn" (click)="onClose()">×</button>
+    </div>
+    
+    <div class="modal-body">
+      <div class="project-info">
+        <p><strong>プロジェクト:</strong> {{ project.name }}</p>
+        <p>
+          <strong>完了率:</strong> {{ project.completionRate }}%
+        </p>
+      </div>
+
+      <div class="action-buttons">
+        <p class="question">プロジェクトの完了率が100%になりました。完了にしますか？</p>
+        <div class="buttons">
+          <button class="btn btn-primary" (click)="onAction('complete')">
+            完了にする
+          </button>
+          <button class="btn btn-secondary" (click)="onAction('not_complete')">
+            完了しない
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+

@@ -1,0 +1,64 @@
+<div class="project-create-container">
+  <div class="project-create-card">
+    <div class="header">
+      <button class="back-btn" (click)="goBack()">← 戻る</button>
+      <h1>プロジェクト作成</h1>
+    </div>
+
+    <form [formGroup]="createForm" (ngSubmit)="onCreate()">
+      <div class="form-group">
+        <label for="name">プロジェクト名 *</label>
+        <input type="text" id="name" formControlName="name" placeholder="プロジェクト名を入力">
+      </div>
+
+      <div class="form-group">
+        <label for="description">説明</label>
+        <textarea id="description" formControlName="description" rows="4" placeholder="プロジェクトの詳細説明"></textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="startDate">開始日 *</label>
+          <input type="date" id="startDate" formControlName="startDate">
+        </div>
+
+        <div class="form-group">
+          <label for="endDate">終了日 *</label>
+          <input type="date" id="endDate" formControlName="endDate">
+        </div>
+      </div>
+
+      <!-- チームモード時にチーム名を表示 -->
+      <div class="form-group" *ngIf="viewMode === 'team' && selectedTeamId">
+        <label>チーム</label>
+        <div class="selected-team-info">
+          👥 {{ getUserTeamName(selectedTeamId) }}
+        </div>
+      </div>
+
+      <!-- チームモード時に担当者選択 -->
+      <div class="form-group" *ngIf="viewMode === 'team' && selectedTeamId && teamMembers.length > 0">
+        <label for="assigneeId">担当者</label>
+        <select id="assigneeId" formControlName="assigneeId" class="form-select">
+          <option value="">担当者を選択（任意）</option>
+          <option *ngFor="let member of teamMembers" [value]="member.userId">
+            {{ member.userName }}
+          </option>
+        </select>
+      </div>
+
+      <!-- 個人モード時はチーム選択なし -->
+      <div class="form-group" *ngIf="viewMode === 'personal'">
+        <p class="info-text">個人プロジェクト: チームは設定されません</p>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="cancel-btn" (click)="goBack()">キャンセル</button>
+        <button type="submit" class="create-btn" [disabled]="createForm.invalid || isCreating">
+          {{ isCreating ? '作成中...' : '作成' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+

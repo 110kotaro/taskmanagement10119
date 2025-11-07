@@ -1,0 +1,77 @@
+<div class="timer-container">
+  <div class="timer-card">
+    <div class="header">
+      <button class="back-btn" (click)="goBack()">← 戻る</button>
+      <h1>作業時間計測</h1>
+    </div>
+
+    <div class="task-info" *ngIf="task">
+      <h2>{{ task.title }}</h2>
+      <p *ngIf="task.description">{{ task.description }}</p>
+    </div>
+
+    <div class="timer-display">
+      <div class="time">{{ displayTime }}</div>
+      <div class="mode-badge" *ngIf="mode === 'pomodoro'">
+        モード: {{ timerState.isBreak ? '休憩中' : 'ポモドーロ' }}
+      </div>
+      <div class="mode-badge" *ngIf="mode === 'normal'">
+        モード: 通常
+      </div>
+    </div>
+
+    <div class="controls">
+      <!-- 初期状態: 開始ボタン -->
+      <div *ngIf="!timerState.isRunning && !timerState.isPaused && !timerState.isBreak" class="start-buttons">
+        <button class="btn btn-primary" (click)="startNormal()">⏱️ 通常タイマー開始</button>
+        <button class="btn btn-secondary" (click)="startPomodoro()">🍅 ポモドーロ開始</button>
+      </div>
+
+      <!-- ポモドーロ完了後: 休憩開始またはスキップ（休憩開始前のみ） -->
+      <div *ngIf="mode === 'pomodoro' && timerState.isBreak && !timerState.isRunning && !timerState.isPaused && timerState.breakElapsed === 0" class="break-start-buttons">
+        <button class="btn btn-primary" (click)="startBreak()">☕ 休憩開始（5分）</button>
+        <button class="btn btn-secondary" (click)="skipBreak()">⏭️ 休憩をスキップ</button>
+        <button class="btn btn-finish" (click)="finish()">✅ 作業を終了</button>
+      </div>
+
+      <!-- 作業中（通常タイマーまたはポモドーロ作業中） -->
+      <div *ngIf="timerState.isRunning && !timerState.isPaused && !timerState.isBreak" class="running-controls">
+        <button class="btn btn-pause" (click)="pause()">⏸️ 一時停止</button>
+        <button class="btn btn-stop" (click)="stop()">⏹️ 停止</button>
+        <button class="btn btn-finish" (click)="finish()">✅ 完了</button>
+      </div>
+
+      <!-- 作業一時停止中 -->
+      <div *ngIf="timerState.isPaused && !timerState.isBreak" class="paused-controls">
+        <button class="btn btn-resume" (click)="resume()">▶️ 再開</button>
+        <button class="btn btn-stop" (click)="stop()">⏹️ 停止</button>
+      </div>
+
+      <!-- 休憩中 -->
+      <div *ngIf="mode === 'pomodoro' && timerState.isBreak && timerState.isRunning && !timerState.isPaused" class="break-running-controls">
+        <button class="btn btn-pause" (click)="pause()">⏸️ 一時停止</button>
+        <button class="btn btn-skip" (click)="skipBreak()">⏭️ 休憩をスキップ</button>
+        <button class="btn btn-resume" (click)="resumeFromBreak()">▶️ 作業を再開</button>
+      </div>
+
+      <!-- 休憩一時停止中 -->
+      <div *ngIf="mode === 'pomodoro' && timerState.isBreak && timerState.isPaused" class="break-paused-controls">
+        <button class="btn btn-resume" (click)="resume()">▶️ 再開</button>
+        <button class="btn btn-skip" (click)="skipBreak()">⏭️ 休憩をスキップ</button>
+        <button class="btn btn-resume" (click)="resumeFromBreak()">▶️ 作業を再開</button>
+      </div>
+
+      <!-- 休憩完了後（5分経過後） -->
+      <div *ngIf="mode === 'pomodoro' && timerState.isBreak && !timerState.isRunning && !timerState.isPaused && timerState.breakElapsed >= breakTime" class="break-complete-controls">
+        <button class="btn btn-primary" (click)="resumeFromBreak()">▶️ 作業を再開</button>
+        <button class="btn btn-finish" (click)="finish()">✅ 作業を終了</button>
+      </div>
+    </div>
+
+    <div class="stats" *ngIf="mode === 'pomodoro'">
+      <p *ngIf="timerState.breaks > 0">完了ポモドーロ: {{ timerState.breaks }}</p>
+      <p *ngIf="timerState.isBreak">休憩中: {{ Math.floor(timerState.breakElapsed / 60) }}分経過</p>
+    </div>
+  </div>
+</div>
+

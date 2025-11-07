@@ -1,3 +1,48 @@
 import { Routes } from '@angular/router';
+import { LoginComponent } from './components/login/login.component';
+import { HomeComponent } from './components/home/home.component';
+import { TaskDetailComponent } from './components/task-detail/task-detail.component';
+import { TaskCreateComponent } from './components/task-create/task-create.component';
+import { ProjectListComponent } from './components/project-list/project-list.component';
+import { ProjectDetailComponent } from './components/project-detail/project-detail.component';
+import { ProjectCreateComponent } from './components/project-create/project-create.component';
+import { TimerComponent } from './components/timer/timer.component';
+import { NotificationsComponent } from './components/notifications/notifications.component';
+import { GanttComponent } from './components/gantt/gantt.component';
+import { TaskListComponent } from './components/task-list/task-list.component';
+import { StatisticsComponent } from './components/statistics/statistics.component';
+import { CommentsComponent } from './components/comments/comments.component';
+import { ArchiveComponent } from './components/archive/archive.component';
+import { TaskImportComponent } from './components/task-import/task-import.component';
+import { SettingsComponent } from './components/settings/settings.component';
+import { AccountComponent } from './components/account/account.component';
+import { TeamListComponent } from './components/team-list/team-list.component';
+import { TeamDetailComponent } from './components/team-detail/team-detail.component';
+import { TeamCreateComponent } from './components/team-create/team-create.component';
+import { TeamInvitationComponent } from './components/team-invitation/team-invitation.component';
 
-export const routes: Routes = [];
+export const routes: Routes = [
+  { path: 'login', component: LoginComponent },
+  { path: 'home', component: HomeComponent },
+  { path: 'task/create', component: TaskCreateComponent },
+  { path: 'task/:id', component: TaskDetailComponent },
+  { path: 'task/:taskId/timer', component: TimerComponent },
+  { path: 'projects', component: ProjectListComponent },
+  { path: 'projects/create', component: ProjectCreateComponent },
+  { path: 'project/:id', component: ProjectDetailComponent },
+  { path: 'notifications', component: NotificationsComponent },
+  { path: 'gantt', component: GanttComponent },
+  { path: 'task-list', component: TaskListComponent },
+  { path: 'statistics', component: StatisticsComponent },
+  { path: 'comments', component: CommentsComponent },
+  { path: 'archive', component: ArchiveComponent },
+  { path: 'task-import', component: TaskImportComponent },
+  { path: 'settings', component: SettingsComponent },
+  { path: 'account', component: AccountComponent },
+  { path: 'teams', component: TeamListComponent },
+  { path: 'teams/create', component: TeamCreateComponent },
+  { path: 'team/:id', component: TeamDetailComponent },
+  { path: 'team-invitation/:token', component: TeamInvitationComponent },
+  { path: '', redirectTo: '/login', pathMatch: 'full' },
+  { path: '**', redirectTo: '/login' }
+];

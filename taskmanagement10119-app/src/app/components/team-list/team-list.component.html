@@ -1,0 +1,32 @@
+<div class="team-list-container">
+  <header class="header">
+    <button class="back-btn" (click)="goBack()">← 戻る</button>
+    <h1>チーム一覧</h1>
+    <button class="create-btn" (click)="openCreateModal()">+ チーム作成</button>
+  </header>
+
+  <main class="main-content">
+    <div *ngIf="isLoading" class="loading">読み込み中...</div>
+    <div *ngIf="!isLoading && teams.length === 0" class="no-teams">
+      チームはありません
+    </div>
+
+    <div class="team-list">
+      <div *ngFor="let team of teams" class="team-card" (click)="viewTeam(team.id)">
+        <h2>{{ team.name }}</h2>
+        <p *ngIf="team.description">{{ team.description }}</p>
+        <div class="team-meta">
+          <div class="meta-item">
+            <span class="label">メンバー数:</span>
+            <span>{{ team.members.length }}人</span>
+          </div>
+          <div class="meta-item">
+            <span class="label">作成日:</span>
+            <span>{{ formatDate(team.createdAt) }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+

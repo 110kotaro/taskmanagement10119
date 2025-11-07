@@ -1,0 +1,283 @@
+<div class="task-import-container">
+  <header class="header">
+    <h1>タスクインポート</h1>
+    <div class="header-actions">
+      <button class="back-btn" (click)="goBack()">← 戻る</button>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="task-import-card">
+
+    <!-- ステップ1: ファイルアップロード -->
+    <div *ngIf="currentStep === 'upload'" class="step-content">
+      <div class="upload-section">
+        <h2>ファイルを選択</h2>
+        <p class="description">
+          Excel (.xlsx, .xls) または CSV (.csv) ファイルをアップロードしてください
+          <a href="#" class="sample-link" (click)="toggleSample(); $event.preventDefault()">
+            📋 サンプルはこちら
+          </a>
+        </p>
+        
+        <!-- サンプル表示（モーダル） -->
+        <div *ngIf="showSample" class="sample-modal-overlay" (click)="toggleSample()">
+          <div class="sample-modal-content" (click)="$event.stopPropagation()">
+            <div class="sample-modal-header">
+              <h3>サンプルデータ形式</h3>
+              <button class="sample-modal-close" (click)="toggleSample()">×</button>
+            </div>
+            <div class="sample-modal-body">
+              <p class="sample-description">
+                以下の形式でExcel/CSVファイルを作成してください。必須項目は「タイトル」「開始日」「終了日」です。
+              </p>
+              <div class="sample-table-container">
+                <table class="sample-table">
+                  <thead>
+                    <tr>
+                      <th *ngFor="let header of sampleHeaders">{{ header }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let row of sampleData">
+                      <td *ngFor="let header of sampleHeaders">{{ row[header] || '-' }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="sample-notes">
+                <h4>注意事項：</h4>
+                <ul>
+                  <li>日付形式：YYYY/MM/DD、YYYY-MM-DD、または YYYY年MM月DD日（例：2024/01/15、2024-01-15、2024年1月15日）</li>
+                  <li>時間形式：HH:MM（例：09:00、18:30）</li>
+                  <li>ステータス：未着手、進行中、完了</li>
+                  <li>優先度：重要、普通、低め、なし</li>
+                  <li>担当者名・プロジェクト名は既存のものを使用してください（存在しないプロジェクト名の場合は自動作成されます）</li>
+                </ul>
+              </div>
+              <div class="sample-modal-actions">
+                <button class="btn btn-secondary" (click)="toggleSample()">閉じる</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="file-upload-area">
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" (change)="onFileSelected($event)" style="display: none;">
+          <label for="fileInput" class="file-upload-label">
+            <span class="upload-icon">📁</span>
+            <span>ファイルを選択</span>
+          </label>
+          <div *ngIf="selectedFile" class="selected-file">
+            <span>選択されたファイル: {{ selectedFile.name }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ステップ2: マッピング -->
+    <div *ngIf="currentStep === 'mapping'" class="step-content">
+      <div class="mapping-section">
+        <h2>カラムマッピング</h2>
+        <p class="description">各フィールドに対応するカラムを選択してください</p>
+        
+        <div class="mapping-form">
+          <form [formGroup]="mappingForm">
+            <div class="mapping-item" *ngFor="let field of availableFields">
+              <label [for]="field.key" [class.required]="field.required">
+                {{ field.label }}
+                <span *ngIf="field.required" class="required-mark">*</span>
+              </label>
+              <select [id]="field.key" [formControlName]="field.key" (change)="onMappingChange()">
+                <option value="">-- 選択しない --</option>
+                <option *ngFor="let header of headers; let i = index" [value]="i">
+                  {{ header }}
+                </option>
+              </select>
+            </div>
+          </form>
+          
+          <div class="mapping-actions">
+            <button class="btn btn-primary" (click)="goToPreview()" [disabled]="!mappingFormValid">
+              プレビューへ
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ステップ3: プレビュー -->
+    <div *ngIf="currentStep === 'preview'" class="step-content">
+      <div class="preview-section">
+        <h2>プレビュー</h2>
+        <p class="description">インポートされるデータを確認してください（全{{ importRows.length }}行を表示、エラーがある行は先頭に表示）</p>
+        
+        <div class="preview-table-container">
+          <table class="preview-table">
+            <thead>
+              <tr>
+                <th class="row-number-col">行番号</th>
+                <th class="title-col">タイトル</th>
+                <th class="date-col">開始日</th>
+                <th class="date-col">終了日</th>
+                <th class="status-col">ステータス</th>
+                <th class="error-col">エラー</th>
+                <th class="import-col">インポート</th>
+                <th class="action-col">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of previewRows; let i = index" 
+                  [class.error-row]="row.errors.length > 0"
+                  [class.editing]="editingRowIndex === i">
+                <td class="row-number-col">{{ row.rowIndex }}</td>
+                <td class="title-col">{{ row.mappedData['title'] || '-' }}</td>
+                <td class="date-col">{{ formatDateForDisplay(row.mappedData['startDate']) }}</td>
+                <td class="date-col">{{ formatDateForDisplay(row.mappedData['endDate']) }}</td>
+                <td class="status-col">{{ formatStatusForDisplay(row.mappedData['status']) }}</td>
+                <td class="error-col">
+                  <div *ngIf="row.errors.length > 0" class="error-list">
+                    <span *ngFor="let error of row.errors" class="error-item">{{ error }}</span>
+                  </div>
+                  <span *ngIf="row.errors.length === 0">-</span>
+                </td>
+                <td class="import-col">
+                  <input type="checkbox" 
+                         [checked]="row.willImport" 
+                         (change)="toggleRowImport(i)"
+                         [disabled]="row.errors.length > 0">
+                </td>
+                <td class="action-col">
+                  <button class="btn btn-small" (click)="editRow(i)">修正</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 手動編集フォーム -->
+        <div *ngIf="editingRowIndex !== null" class="edit-form-section">
+          <h3>手動修正</h3>
+          <form [formGroup]="editForm">
+            <div class="form-row">
+              <div class="form-group">
+                <label>タイトル *</label>
+                <input type="text" formControlName="title">
+              </div>
+              <div class="form-group">
+                <label>説明</label>
+                <input type="text" formControlName="description">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>開始日 *</label>
+                <input type="date" formControlName="startDate">
+              </div>
+              <div class="form-group">
+                <label>開始時間</label>
+                <input type="time" formControlName="startTime">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>終了日 *</label>
+                <input type="date" formControlName="endDate">
+              </div>
+              <div class="form-group">
+                <label>終了時間</label>
+                <input type="time" formControlName="endTime">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>ステータス</label>
+                <select formControlName="status">
+                  <option value="not_started">未着手</option>
+                  <option value="in_progress">進行中</option>
+                  <option value="completed">完了</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>優先度</label>
+                <select formControlName="priority">
+                  <option value="important">重要</option>
+                  <option value="normal">普通</option>
+                  <option value="low">低め</option>
+                  <option value="none">なし</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>担当者</label>
+                <select formControlName="assigneeId">
+                  <option value="">選択しない</option>
+                  <option *ngFor="let user of users" [value]="user.id">
+                    {{ user.displayName || user.email }}
+                  </option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>プロジェクト</label>
+                <select formControlName="projectId">
+                  <option value="">選択しない</option>
+                  <option *ngFor="let project of projects" [value]="project.id">
+                    {{ project.name }}
+                  </option>
+                </select>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-primary" (click)="saveRowEdit()">保存</button>
+              <button type="button" class="btn btn-secondary" (click)="cancelRowEdit()">キャンセル</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="preview-actions">
+          <button class="btn btn-secondary" (click)="currentStep = 'mapping'">マッピングに戻る</button>
+          <button class="btn btn-primary" (click)="executeImport()">
+            インポート開始 ({{ getImportCount() }}件)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ステップ4: 結果表示 -->
+    <div *ngIf="currentStep === 'result' && importResult" class="step-content">
+      <div class="result-section">
+        <h2>インポート結果</h2>
+        
+        <div class="result-summary">
+          <div class="result-item success">
+            <span class="result-label">成功:</span>
+            <span class="result-value">{{ importResult.success }}件</span>
+          </div>
+          <div class="result-item skipped">
+            <span class="result-label">スキップ:</span>
+            <span class="result-value">{{ importResult.skipped }}件</span>
+          </div>
+          <div class="result-item error">
+            <span class="result-label">エラー:</span>
+            <span class="result-value">{{ importResult.errors }}件</span>
+          </div>
+        </div>
+
+        <div class="result-details" *ngIf="importResult.details.length > 0">
+          <h3>詳細</h3>
+          <ul>
+            <li *ngFor="let detail of importResult.details">{{ detail }}</li>
+          </ul>
+        </div>
+
+        <div class="result-actions">
+          <button class="btn btn-primary" (click)="reset()">新しいファイルをインポート</button>
+          <button class="btn btn-secondary" (click)="goBack()">ホームに戻る</button>
+        </div>
+      </div>
+    </div>
+    </div>
+  </main>
+</div>
+

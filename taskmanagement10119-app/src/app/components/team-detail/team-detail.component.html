@@ -1,0 +1,150 @@
+<div class="team-detail-container">
+  <div *ngIf="isLoading" class="loading">読み込み中...</div>
+  
+  <div *ngIf="!isLoading && team" class="team-detail-card">
+    <!-- ヘッダー -->
+    <div class="header">
+      <button class="back-btn" (click)="goBack()">← 戻る</button>
+      <div class="header-content">
+        <h1>{{ team.name }}</h1>
+        <div class="header-actions">
+          <button *ngIf="!isOwner" class="leave-btn" (click)="onLeaveTeam()">チームを退会</button>
+        </div>
+      </div>
+      <p *ngIf="team.description" class="description">{{ team.description }}</p>
+    </div>
+
+    <!-- チーム情報 -->
+    <div class="team-info">
+      <div class="info-item">
+        <span class="label">メンバー数:</span>
+        <span>{{ team.members.length }}人</span>
+      </div>
+      <div class="info-item">
+        <span class="label">作成日:</span>
+        <span>{{ formatDate(team.createdAt) }}</span>
+      </div>
+    </div>
+
+    <!-- メンバー管理（オーナーまたは管理者のみ） -->
+    <div *ngIf="isAdmin" class="section">
+      <h2>メンバー招待</h2>
+      
+      <!-- メール招待 -->
+      <div class="invite-form">
+        <input 
+          type="email" 
+          [(ngModel)]="inviteEmail" 
+          placeholder="メールアドレスを入力"
+          class="invite-input">
+        <button 
+          class="invite-btn" 
+          (click)="onInvite()"
+          [disabled]="isInviting">
+          {{ isInviting ? '招待中...' : 'メールで招待' }}
+        </button>
+      </div>
+
+      <!-- リンク招待 -->
+      <div class="link-invite-section">
+        <button 
+          class="generate-link-btn" 
+          (click)="onGenerateLink()"
+          [disabled]="isGeneratingLink">
+          {{ isGeneratingLink ? '生成中...' : '招待リンクを発行' }}
+        </button>
+        
+        <!-- 発行されたリンク表示 -->
+        <div *ngIf="showInvitationLink && invitationLink" class="invitation-link-display">
+          <p class="link-label">招待リンク（7日間有効）:</p>
+          <div class="link-container">
+            <input 
+              type="text" 
+              [value]="invitationLink" 
+              readonly
+              class="link-input">
+            <button class="copy-btn" (click)="onCopyLink()">コピー</button>
+            <button class="close-btn" (click)="closeInvitationLink()">×</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- お知らせ送信（オーナーまたは管理者のみ） -->
+    <div *ngIf="isAdmin" class="section">
+      <h2>お知らせ送信</h2>
+      <div class="announcement-form">
+        <textarea 
+          [(ngModel)]="announcementMessage" 
+          placeholder="お知らせの内容を入力"
+          rows="3"
+          class="announcement-input">
+        </textarea>
+        <button 
+          class="announcement-btn" 
+          (click)="onSendAnnouncement()"
+          [disabled]="isSendingAnnouncement">
+          {{ isSendingAnnouncement ? '送信中...' : '送信' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- メンバー一覧 -->
+    <div class="section">
+      <h2>メンバー一覧</h2>
+      <div *ngIf="team.members.length === 0" class="no-members">
+        メンバーはいません
+      </div>
+      <div class="member-list">
+        <div *ngFor="let member of team.members" class="member-card">
+          <div class="member-info">
+            <div class="member-name">{{ member.userName }}</div>
+            <div class="member-email">{{ member.userEmail }}</div>
+            <div class="member-role">
+              <span *ngIf="team.ownerId === member.userId" class="owner-badge">オーナー</span>
+              <span *ngIf="team.ownerId !== member.userId" class="role-badge role-{{ member.role }}">{{ getRoleLabel(member.role) }}</span>
+            </div>
+            <div class="member-joined">参加日: {{ formatDate(member.joinedAt) }}</div>
+          </div>
+          <div *ngIf="isOwner && team.ownerId !== member.userId" class="member-actions">
+            <select 
+              [value]="member.role"
+              (change)="onUpdateRole(member.userId, $any($event.target).value)"
+              class="role-select">
+              <option value="admin">管理者</option>
+              <option value="member">メンバー</option>
+              <option value="viewer">閲覧者</option>
+            </select>
+            <button 
+              class="remove-btn" 
+              (click)="onRemoveMember(member.userId)">
+              削除
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 招待中リスト（管理者のみ） -->
+    <div *ngIf="isAdmin && pendingInvitations.length > 0" class="section">
+      <h2>招待中</h2>
+      <div class="invitation-list">
+        <div *ngFor="let invitation of pendingInvitations" class="invitation-card">
+          <div class="invitation-info">
+            <div class="invitation-email">{{ invitation.invitedByEmail || '招待リンク' }}</div>
+            <div class="invitation-type">
+              <span class="type-badge" [class.email-type]="invitation.invitationType === 'email'" [class.link-type]="invitation.invitationType === 'link'">
+                {{ invitation.invitationType === 'email' ? 'メール招待' : 'リンク招待' }}
+              </span>
+            </div>
+            <div class="invitation-meta">
+              <div class="invitation-date">招待日: {{ formatDate(invitation.createdAt) }}</div>
+              <div class="invitation-expires">有効期限: {{ formatDate(invitation.expiresAt) }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+

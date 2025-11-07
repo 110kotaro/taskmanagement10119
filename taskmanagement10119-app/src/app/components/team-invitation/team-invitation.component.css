@@ -1,0 +1,160 @@
+.team-invitation-container {
+  min-height: 100vh;
+  background: var(--gradient-background);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.team-invitation-card {
+  max-width: 500px;
+  width: 100%;
+  background: var(--color-surface);
+  padding: 2rem;
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-xl);
+}
+
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: var(--color-text-secondary);
+}
+
+.error-message {
+  text-align: center;
+  padding: 2rem;
+}
+
+.error-message h2 {
+  color: var(--color-danger);
+  margin-bottom: 1rem;
+}
+
+.error-message p {
+  color: var(--color-text);
+  margin-bottom: 1.5rem;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.header h1 {
+  margin: 0 0 1rem 0;
+  color: var(--color-text);
+  font-size: var(--font-size-xl);
+}
+
+.invitation-info {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+}
+
+.invitation-info strong {
+  color: var(--color-text);
+}
+
+.invitation-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: var(--font-size-base);
+}
+
+.form-group input[type="email"],
+.form-group input[type="text"],
+.form-group input[type="password"] {
+  padding: 0.75rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-base);
+  background: var(--color-background);
+  color: var(--color-text);
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.form-group label:has(input[type="radio"]) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: normal;
+}
+
+.form-group label:has(input[type="radio"]) input[type="radio"] {
+  width: auto;
+  margin: 0;
+}
+
+.error-message-inline {
+  padding: 0.75rem;
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: var(--border-radius);
+  color: #c33;
+  font-size: var(--font-size-sm);
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.cancel-btn, .submit-btn, .back-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: var(--border-radius);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  transition: all 0.2s;
+}
+
+.cancel-btn {
+  background: var(--color-background);
+  color: var(--color-text);
+  border: 2px solid var(--color-border);
+}
+
+.cancel-btn:hover {
+  background: var(--color-surface);
+}
+
+.submit-btn, .back-btn {
+  background: var(--color-primary);
+  color: white;
+}
+
+.submit-btn:hover:not(:disabled),
+.back-btn:hover {
+  background: var(--color-primary-dark);
+}
+
+.submit-btn:disabled {
+  background: var(--color-border);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+

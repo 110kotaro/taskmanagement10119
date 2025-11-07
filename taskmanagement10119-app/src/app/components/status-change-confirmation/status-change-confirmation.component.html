@@ -1,0 +1,47 @@
+<div class="modal-overlay" (click)="onClose()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>日付経過の確認</h3>
+      <button class="close-btn" (click)="onClose()">×</button>
+    </div>
+    
+    <div class="modal-body">
+      <div class="task-info">
+        <p><strong>タスク:</strong> {{ task.title }}</p>
+        <p *ngIf="checkType === 'startDate'">
+          <strong>開始日:</strong> {{ formatDate(task.startDate) }}（経過しています）
+        </p>
+        <p *ngIf="checkType === 'endDate'">
+          <strong>終了日:</strong> {{ formatDate(task.endDate) }}（経過しています）
+        </p>
+      </div>
+
+      <div *ngIf="checkType === 'startDate'" class="action-buttons">
+        <p class="question">開始日を過ぎています。ステータスを進行中に変更しますか？</p>
+        <div class="buttons">
+          <button class="btn btn-primary" (click)="onAction('change_to_in_progress')">
+            進行中に変更
+          </button>
+          <button class="btn btn-secondary" (click)="onAction('ignore')">
+            無視
+          </button>
+        </div>
+      </div>
+
+      <div *ngIf="checkType === 'endDate'" class="action-buttons">
+        <p class="question">終了日を過ぎています。どうしますか？</p>
+        <div class="buttons">
+          <button class="btn btn-primary" (click)="onAction('change_to_completed')">
+            完了にする
+          </button>
+          <button class="btn btn-warning" (click)="onAction('change_end_date')">
+            終了日を変更する
+          </button>
+          <button class="btn btn-secondary" (click)="onAction('ignore')">
+            無視
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

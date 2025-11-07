@@ -1,0 +1,168 @@
+<div class="statistics-container">
+  <header class="header">
+    <button class="back-btn" (click)="goBack()">← 戻る</button>
+    <h1>📊 統計</h1>
+  </header>
+
+  <main class="main-content">
+    <!-- 時間範囲の切り替え -->
+    <div class="time-range-selector">
+      <button 
+        class="range-btn" 
+        [class.active]="timeRange === 'week'"
+        (click)="switchTimeRange('week')">
+        今週
+      </button>
+      <button 
+        class="range-btn" 
+        [class.active]="timeRange === 'month'"
+        (click)="switchTimeRange('month')">
+        今月
+      </button>
+    </div>
+
+    <!-- 判定パターンの切り替え -->
+    <div class="filter-pattern-selector">
+      <label class="pattern-label">判定基準：</label>
+      <button 
+        class="pattern-btn" 
+        [class.active]="filterPattern === 'endDate'"
+        (click)="switchFilterPattern('endDate')">
+        期限日基準
+      </button>
+      <button 
+        class="pattern-btn" 
+        [class.active]="filterPattern === 'startDate'"
+        (click)="switchFilterPattern('startDate')">
+        開始日基準
+      </button>
+      <button 
+        class="pattern-btn" 
+        [class.active]="filterPattern === 'overlap'"
+        (click)="switchFilterPattern('overlap')">
+        重複ベース
+      </button>
+    </div>
+
+    <div *ngIf="isLoading" class="loading">読み込み中...</div>
+
+    <div *ngIf="!isLoading" class="statistics-content">
+      
+      <!-- 全体統計 -->
+      <section class="stats-section">
+        <h2>{{ getTimeRangeLabel() }}の統計</h2>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">総タスク数</div>
+            <div class="stat-value">{{ statistics.totalTasks }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">完了タスク数</div>
+            <div class="stat-value completed">{{ statistics.completedTasks }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">完了率</div>
+            <div class="stat-value">
+              <span class="percentage">{{ statistics.completionRate }}%</span>
+              <div class="progress-bar">
+                <div 
+                  class="progress-fill" 
+                  [style.width.%]="statistics.completionRate">
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">総作業時間</div>
+            <div class="stat-value">{{ formatTime(statistics.totalWorkTime) }}</div>
+          </div>
+          <div class="stat-card delayed">
+            <div class="stat-label">遅延タスク数</div>
+            <div class="stat-value">{{ statistics.delayedTasks }}</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 作業時間の推移グラフ -->
+      <section class="stats-section">
+        <h2>作業時間の推移</h2>
+        <div class="chart-container">
+          <canvas #workTimeChart></canvas>
+        </div>
+      </section>
+
+      <!-- プロジェクト別統計 -->
+      <section class="stats-section" *ngIf="projectStatistics.length > 0">
+        <h2>プロジェクト別統計</h2>
+        <div class="project-stats">
+          <div *ngFor="let projectStat of projectStatistics" class="project-stat-card">
+            <h3 class="project-name">{{ projectStat.project.name }}</h3>
+            <div class="project-stats-grid">
+              <div class="project-stat-item">
+                <span class="project-stat-label">タスク数</span>
+                <span class="project-stat-value">{{ projectStat.totalTasks }}</span>
+              </div>
+              <div class="project-stat-item">
+                <span class="project-stat-label">完了数</span>
+                <span class="project-stat-value">{{ projectStat.completedTasks }}</span>
+              </div>
+              <div class="project-stat-item">
+                <span class="project-stat-label">完了率</span>
+                <span class="project-stat-value">
+                  {{ projectStat.completionRate }}%
+                </span>
+                <div class="project-progress-bar">
+                  <div 
+                    class="project-progress-fill" 
+                    [style.width.%]="projectStat.completionRate">
+                  </div>
+                </div>
+              </div>
+              <div class="project-stat-item">
+                <span class="project-stat-label">作業時間</span>
+                <span class="project-stat-value">
+                  {{ formatTime(projectStat.totalWorkTime) }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 遅延タスク詳細 -->
+      <section class="stats-section" *ngIf="statistics.delayedTasks > 0">
+        <h2>⚠️ 遅延タスク</h2>
+        <div class="delayed-info">
+          <p>現在、{{ statistics.delayedTasks }}件のタスクが期限を過ぎています。</p>
+          <button 
+            class="details-btn" 
+            (click)="toggleDelayedTasksDetails()">
+            {{ showDelayedTasksDetails ? '閉じる' : '詳細' }}
+          </button>
+        </div>
+        
+        <!-- プルダウン表示 -->
+        <div class="delayed-tasks-list" *ngIf="showDelayedTasksDetails">
+          <div 
+            *ngFor="let task of delayedTasksList" 
+            class="delayed-task-item"
+            (click)="viewTaskDetail(task.id)">
+            <div class="task-title-row">
+              <span class="task-title">{{ task.title }}</span>
+              <span class="task-status" [ngClass]="'status-' + task.status">
+                {{ getStatusLabel(task.status) }}
+              </span>
+            </div>
+            <div class="task-meta-row">
+              <span class="task-due-date">期限: {{ formatDate(task.endDate) }}</span>
+              <span class="task-project" *ngIf="task.projectName">
+                📁 {{ task.projectName }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+

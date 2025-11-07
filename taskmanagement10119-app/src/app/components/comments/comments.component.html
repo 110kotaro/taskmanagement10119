@@ -1,0 +1,180 @@
+<div class="comments-container">
+  <header class="header">
+    <button class="back-btn" (click)="goBack()">← 戻る</button>
+    <h1>💬 コメント一覧</h1>
+  </header>
+
+  <main class="main-content">
+    <!-- フィルター・検索セクション -->
+    <div class="filters-section">
+      <!-- 検索窓 -->
+      <div class="search-box">
+        <input 
+          type="text" 
+          placeholder="コメントを検索..."
+          [(ngModel)]="searchKeyword"
+          (input)="onSearchChange()"
+          class="search-input">
+      </div>
+
+      <!-- フィルター -->
+      <div class="filters">
+        <div class="filter-group autocomplete-group">
+          <label>プロジェクト:</label>
+          <div class="autocomplete-wrapper">
+            <input 
+              type="text" 
+              placeholder="プロジェクト名を入力..."
+              [(ngModel)]="projectNameInput"
+              (ngModelChange)="onProjectNameChange($event)"
+              (focus)="onProjectNameInput()"
+              (blur)="hideProjectSuggestions()"
+              class="autocomplete-input">
+            <button *ngIf="projectNameInput" 
+                    class="clear-btn" 
+                    (click)="clearProjectFilter(); $event.stopPropagation()"
+                    type="button">×</button>
+            <div class="autocomplete-dropdown" *ngIf="showProjectSuggestions && filteredProjectSuggestions.length > 0">
+              <div *ngFor="let project of filteredProjectSuggestions" 
+                   class="autocomplete-item"
+                   (mousedown)="selectProject(project); $event.preventDefault()">
+                {{ project.name }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-group autocomplete-group">
+          <label>タスク:</label>
+          <div class="autocomplete-wrapper">
+            <input 
+              type="text" 
+              placeholder="タスク名を入力..."
+              [(ngModel)]="taskNameInput"
+              (ngModelChange)="onTaskNameChange($event)"
+              (focus)="onTaskNameInput()"
+              (blur)="hideTaskSuggestions()"
+              class="autocomplete-input">
+            <button *ngIf="taskNameInput" 
+                    class="clear-btn" 
+                    (click)="clearTaskFilter(); $event.stopPropagation()"
+                    type="button">×</button>
+            <div class="autocomplete-dropdown" *ngIf="showTaskSuggestions && filteredTaskSuggestions.length > 0">
+              <div *ngFor="let task of filteredTaskSuggestions" 
+                   class="autocomplete-item"
+                   (mousedown)="selectTask(task); $event.preventDefault()">
+                {{ task.title }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label>投稿者:</label>
+          <select [(ngModel)]="selectedUserId" (change)="onFilterChange()">
+            <option value="all">すべて</option>
+            <option *ngFor="let member of teamMembers" [value]="member.id">
+              {{ member.name }}
+            </option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label>投稿日:</label>
+          <select [(ngModel)]="selectedDateRange" (change)="onFilterChange()">
+            <option value="all">すべて</option>
+            <option value="today">今日</option>
+            <option value="week">今週</option>
+            <option value="month">今月</option>
+            <option value="custom">期間指定</option>
+          </select>
+        </div>
+
+        <div class="filter-group" *ngIf="selectedDateRange === 'custom'">
+          <label>開始日:</label>
+          <input type="date" [(ngModel)]="customStartDate" (change)="onFilterChange()">
+        </div>
+
+        <div class="filter-group" *ngIf="selectedDateRange === 'custom'">
+          <label>終了日:</label>
+          <input type="date" [(ngModel)]="customEndDate" (change)="onFilterChange()">
+        </div>
+
+        <div class="filter-group">
+          <label>未読/既読:</label>
+          <select [(ngModel)]="selectedReadStatus" (change)="onFilterChange()">
+            <option value="all">すべて</option>
+            <option value="read">既読</option>
+            <option value="unread">未読</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label>ステータス:</label>
+          <select [(ngModel)]="selectedTaskStatus" (change)="onFilterChange()">
+            <option value="all">すべて</option>
+            <option value="not_started">未着手</option>
+            <option value="in_progress">進行中</option>
+            <option value="completed">完了済み</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label>優先度:</label>
+          <select [(ngModel)]="selectedPriority" (change)="onFilterChange()">
+            <option value="all">すべて</option>
+            <option value="important">重要</option>
+            <option value="normal">普通</option>
+            <option value="low">低め</option>
+            <option value="none">なし</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label>&#64;メンション:</label>
+          <select [(ngModel)]="hasMention" (change)="onFilterChange()">
+            <option value="all">すべて</option>
+            <option value="yes">あり</option>
+            <option value="no">なし</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- コメント一覧 -->
+    <div class="comments-list-container">
+      <div *ngIf="isLoading" class="loading">読み込み中...</div>
+      <div *ngIf="!isLoading && filteredComments.length === 0" class="no-comments">
+        コメントが見つかりません
+      </div>
+
+      <div *ngIf="!isLoading" class="comments-list">
+        <div *ngFor="let comment of filteredComments" class="comment-item" (click)="viewTask(comment.taskId)">
+          <div class="comment-header">
+            <div class="comment-meta-left">
+              <span class="comment-author">{{ comment.userName }}</span>
+              <span class="comment-date">{{ formatDateTime(comment.createdAt) }}</span>
+            </div>
+            <div class="comment-meta-right">
+              <span class="task-link">📎 {{ comment.taskTitle }}</span>
+              <span *ngIf="comment.projectName" class="project-badge">📁 {{ comment.projectName }}</span>
+            </div>
+          </div>
+          <div class="comment-content">
+            {{ comment.content }}
+          </div>
+          <div class="comment-footer">
+            <span class="status-badge" [ngClass]="'status-' + comment.taskStatus">
+              {{ getStatusLabel(comment.taskStatus) }}
+            </span>
+            <span class="priority-badge" [ngClass]="'priority-' + comment.taskPriority">
+              {{ getPriorityLabel(comment.taskPriority) }}
+            </span>
+            <span *ngIf="comment.content.includes('@')" class="mention-badge">&#64;メンション</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+

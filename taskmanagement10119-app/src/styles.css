@@ -1,1 +1,70 @@
-/* You can add global styles to this file, and also import other style files */
+html, body {
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+  }
+  
+  * {
+    box-sizing: border-box;
+  }
+
+:root {
+  /* ライトテーマ */
+  --color-primary: #667eea;
+  --color-primary-dark: #5568d3;
+  --color-secondary: #764ba2;
+  --color-background: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-text: #333333;
+  --color-text-secondary: #666666;
+  --color-border: #e0e0e0;
+  --color-error: #dc3545;
+  --color-success: #28a745;
+  --color-warning: #ffc107;
+  --color-info: #17a2b8;
+  
+  /* グラデーション */
+  --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --gradient-background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  
+  /* スペーシング */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  
+  /* フォント */
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.8rem;
+  
+  /* ボーダー */
+  --border-radius: 6px;
+  --border-radius-lg: 12px;
+  
+  /* シャドウ */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+:root[data-theme="dark"],
+[data-theme="dark"] {
+  --color-primary: #7c8ef5;
+  --color-primary-dark: #6a7ae4;
+  --color-secondary: #8b5fb8;
+  --color-background: #1a1a1a;
+  --color-surface: #2d2d2d;
+  --color-text: #e0e0e0;
+  --color-text-secondary: #a0a0a0;
+  --color-border: #404040;
+  --color-error: #f56565;
+  --color-success: #48bb78;
+  --color-warning: #ed8936;
+  --color-info: #4299e1;
+  
+  --gradient-primary: linear-gradient(135deg, #7c8ef5 0%, #8b5fb8 100%);
+  --gradient-background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+}

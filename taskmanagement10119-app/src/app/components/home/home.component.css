@@ -1,0 +1,407 @@
+.home-container {
+  min-height: 100vh;
+  background: var(--color-background);
+}
+
+.header {
+  background: var(--gradient-primary);
+  padding: var(--spacing-md) var(--spacing-xl);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: var(--shadow-md);
+  position: fixed;
+  top: 0;
+  left: 250px; /* デフォルト値 */
+  right: 0;
+  z-index: 100;
+  transition: left 0.3s ease;
+}
+
+/* サイドバーが閉じている場合 */
+:host-context(.app-container.sidebar-closed) .header {
+  left: 0;
+}
+
+/* モバイルではサイドバーが閉じている前提で左から0 */
+@media (max-width: 768px) {
+  .header {
+    left: 0;
+  }
+}
+
+.header h1 {
+  color: white;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.view-mode-toggle {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.5rem;
+  border-radius: var(--border-radius);
+}
+
+.mode-btn {
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  transition: all 0.2s;
+}
+
+.mode-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.mode-btn.active {
+  background: white;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.team-select {
+  padding: 0.5rem;
+  background: white;
+  color: var(--color-text);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-base);
+  cursor: pointer;
+}
+
+.notifications-btn {
+  position: relative;
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: white !important;
+  border: 1px solid white !important;
+}
+
+.notifications-btn:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+}
+
+.badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: var(--color-error);
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-sm);
+  font-weight: bold;
+}
+
+.gantt-btn {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: white !important;
+  border: 1px solid white !important;
+}
+
+.gantt-btn:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+}
+
+
+.statistics-btn {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: white !important;
+  border: 1px solid white !important;
+}
+
+.statistics-btn:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+}
+
+.task-list-btn {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: white !important;
+  border: 1px solid white !important;
+}
+
+.task-list-btn:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+}
+
+.projects-btn {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: white !important;
+  border: 1px solid white !important;
+}
+
+.projects-btn:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+}
+
+.header button {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: white;
+  color: var(--color-primary);
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.next-task-btn {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: white !important;
+  border: 1px solid white !important;
+}
+
+.next-task-btn:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+}
+
+.create-task-btn {
+  background: var(--color-primary) !important;
+  color: white !important;
+}
+
+.create-task-btn:hover {
+  background: var(--color-primary-dark) !important;
+}
+
+.header button:hover {
+  background: var(--color-surface);
+}
+
+.main-content {
+  max-width: 1200px;
+  margin: var(--spacing-md) auto;
+  padding: 0 var(--spacing-xl);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+  padding-top: 5rem;
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+.task-section {
+  background: var(--color-surface);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+  /* 高さを固定 */
+  height: 480px; /* または calc(100vh - 200px) など */
+  display: flex;
+  flex-direction: column;
+}
+
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: var(--spacing-md);
+  border-bottom: 3px solid var(--color-primary);
+  padding-bottom: 0rem;
+}
+
+
+.section-header h2{
+  margin: 0 0 var(--spacing-lg) 0;
+  color: var(--color-text);
+  flex: 1;
+  margin:0;
+}
+
+.week-view-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.week-view-toggle {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-primary);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  transition: all 0.2s;
+  margin-top: -1rem;
+}
+
+.week-view-toggle:hover {
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.week-view-toggle.active {
+  background: var(--color-primary);
+  color: white;
+}
+
+/* タスクコンテンツ部分をスクロール可能にする */
+.task-section-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.category-section {
+  margin-bottom: 1rem;
+}
+
+.category-title {
+  margin: 0 0 var(--spacing-md) 0;
+  padding: 0.75rem;
+  background: var(--color-background);
+  border-left: 4px solid var(--color-primary);
+  font-size: var(--font-size-lg);
+  color: var(--color-text);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.category-title:hover {
+  background: var(--color-surface);
+}
+
+.toggle-icon {
+  font-size: var(--font-size-sm);
+  color: var(--color-primary);
+  user-select: none;
+}
+
+.task-card h4 {
+  margin: 0 0 var(--spacing-sm) 0;
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+}
+
+.task-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.task-card {
+  padding: var(--spacing-lg);
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.task-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-lg);
+}
+
+.task-actions {
+  margin-top: 0.25rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.task-card h3 {
+  margin: 0 0 var(--spacing-sm) 0;
+  color: var(--color-text);
+}
+
+.task-card p {
+  color: var(--color-text-secondary);
+  margin: var(--spacing-sm) 0;
+}
+
+.task-card .team-name {
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  margin: var(--spacing-xs) 0;
+}
+
+.task-meta {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.task-meta-left {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.status-not_started {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.status-in_progress {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+.status-completed {
+  background: #e8f5e9;
+  color: #388e3c;
+}
+
+.status-overdue {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.due-date {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.loading, .no-tasks {
+  text-align: center;
+  padding: 2rem;
+  color: #999;
+}
+
+.delete-btn {
+  padding: 0.5rem 0.75rem;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: background 0.3s;
+}
+
+.delete-btn:hover {
+  background: #c0392b;
+}
+

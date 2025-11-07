@@ -1,0 +1,375 @@
+.comments-container {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 1rem 2rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  position: fixed;
+  top: 0;
+  left: 250px; /* デフォルト値 */
+  right: 0;
+  z-index: 100;
+  gap: 1rem;
+  transition: left 0.3s ease;
+}
+
+/* サイドバーが閉じている場合 */
+:host-context(.app-container.sidebar-closed) .header {
+  left: 0;
+}
+
+/* モバイルではサイドバーが閉じている前提で左から0 */
+@media (max-width: 768px) {
+  .header {
+    left: 0;
+  }
+}
+
+.back-btn {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.2s;
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.header h1 {
+  margin: 0;
+  color: white;
+  font-size: 1.8rem;
+}
+
+.main-content {
+  padding-top: 5rem; /* ヘッダーの高さ分 */
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-bottom: 2rem;
+}
+
+/* フィルター・検索セクション */
+.filters-section {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1.5rem;
+}
+
+.search-box {
+  margin-bottom: 1.5rem;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.filter-group label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #666;
+}
+
+.filter-group select,
+.filter-group input[type="date"] {
+  padding: 0.5rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  transition: border-color 0.2s;
+}
+
+.filter-group select:focus,
+.filter-group input[type="date"]:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+/* オートコンプリート用のスタイル */
+.autocomplete-group {
+  position: relative;
+}
+
+.autocomplete-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.autocomplete-input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  transition: border-color 0.2s;
+  padding-right: 2rem;
+}
+
+.autocomplete-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.clear-btn {
+  position: absolute;
+  right: 0.5rem;
+  background: transparent;
+  border: none;
+  color: #999;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  z-index: 10;
+}
+
+.clear-btn:hover {
+  color: #333;
+}
+
+.autocomplete-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  margin-top: 2px;
+}
+
+.autocomplete-item {
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.autocomplete-item:last-child {
+  border-bottom: none;
+}
+
+.autocomplete-item:hover {
+  background: #f5f5f5;
+}
+
+/* コメント一覧 */
+.comments-list-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+  min-height: 400px;
+}
+
+.loading,
+.no-comments {
+  text-align: center;
+  padding: 3rem;
+  color: #999;
+  font-size: 1.125rem;
+}
+
+.comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.comment-item {
+  padding: 1.5rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  background: #fafafa;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.comment-item:hover {
+  border-color: #667eea;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+  transform: translateY(-2px);
+}
+
+.comment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.comment-meta-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.comment-author {
+  font-weight: 600;
+  font-size: 1rem;
+  color: #333;
+}
+
+.comment-date {
+  font-size: 0.875rem;
+  color: #999;
+}
+
+.comment-meta-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.task-link {
+  font-size: 0.875rem;
+  color: #667eea;
+  font-weight: 500;
+  text-decoration: underline;
+}
+
+.project-badge {
+  font-size: 0.75rem;
+  color: #764ba2;
+  background: #f0e6ff;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.comment-content {
+  padding: 1rem;
+  background: white;
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+  margin-bottom: 0.75rem;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.6;
+  color: #333;
+}
+
+.comment-footer {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.status-badge,
+.priority-badge,
+.mention-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.status-badge {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.status-badge.status-not_started {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.status-badge.status-in_progress {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+.status-badge.status-completed {
+  background: #e8f5e9;
+  color: #388e3c;
+}
+
+.priority-badge {
+  background: #fce4ec;
+  color: #c2185b;
+}
+
+.priority-badge.priority-important {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.priority-badge.priority-normal {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.priority-badge.priority-low {
+  background: #f1f8e9;
+  color: #558b2f;
+}
+
+.mention-badge {
+  background: #fff9c4;
+  color: #f57f17;
+}
+
+/* レスポンシブ */
+@media (max-width: 768px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .comment-header {
+    flex-direction: column;
+  }
+
+  .comment-meta-right {
+    align-items: flex-start;
+    width: 100%;
+  }
+}
+

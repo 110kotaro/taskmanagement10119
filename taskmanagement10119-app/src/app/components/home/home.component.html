@@ -1,0 +1,96 @@
+<div class="home-container">
+  <header class="header">
+    <h1>タスク管理アプリ</h1>
+    <div class="header-actions">
+      <button 
+        *ngIf="showNextTasks"
+        class="next-task-btn" 
+        (click)="openNextTaskCandidates()">次やるタスク</button>
+      <button class="create-task-btn" (click)="openCreateTaskModal()">+ タスク作成</button>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <!-- 今日のタスク -->
+    <section class="task-section">
+      <div class="section-header">
+        <h2>今日のタスク</h2>
+      </div>
+      <div *ngIf="isLoading" class="loading">読み込み中...</div>
+      <div *ngIf="!isLoading && todayTaskCategories.length === 0" class="no-tasks">
+        今日のタスクはありません
+      </div>
+      
+      <div class="task-section-content">
+      <!-- カテゴリごとに表示 -->
+      <div *ngFor="let category of todayTaskCategories; let i = index" class="category-section">
+        <h3 class="category-title" (click)="toggleCategory('today-' + i)">
+          <span class="toggle-icon">{{ isCategoryExpanded('today-' + i) ? '▼' : '▶' }}</span>
+          {{ category.name }}
+        </h3>
+        <div class="task-list" *ngIf="isCategoryExpanded('today-' + i)">
+          <div *ngFor="let task of category.tasks" class="task-card" (click)="viewTaskDetail(task.id)">
+            <h4>{{ task.title }}</h4>
+            <p *ngIf="task.teamName" class="team-name">チーム: {{ task.teamName }}</p>
+            <p *ngIf="task.description">{{ task.description }}</p>
+            <div class="task-meta">
+              <div class="task-meta-left">
+                <span class="status status-{{ task.status }}">{{ getStatusLabel(task.status) }}</span>
+                <span class="due-date">期限: {{ formatDate(task.endDate) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+    </section>
+
+    <!-- 今週のタスク -->
+    <section class="task-section">
+      <div class="section-header">
+        <h2>今週のタスク</h2>
+        <div class="week-view-controls">
+          表示期間：{{getWeekViewLabel()}}
+          <button class="week-view-toggle" (click)="toggleWeekViewMode()" 
+            [class.active]="weekViewMode === 'calendar'">
+            期間変更
+          </button>
+        </div>
+      </div>
+      <div *ngIf="isLoading" class="loading">読み込み中...</div>
+      <div *ngIf="!isLoading && weekTaskCategories.length === 0" class="no-tasks">
+        今週のタスクはありません
+      </div>
+      
+      <div class="task-section-content">
+      <!-- カテゴリごとに表示 -->
+      <div *ngFor="let category of weekTaskCategories; let i = index" class="category-section">
+        <h3 class="category-title" (click)="toggleCategory('week-' + i)">
+          <span class="toggle-icon">{{ isCategoryExpanded('week-' + i) ? '▼' : '▶' }}</span>
+          {{ category.name }}
+        </h3>
+        <div class="task-list" *ngIf="isCategoryExpanded('week-' + i)">
+          <div *ngFor="let task of category.tasks" class="task-card" (click)="viewTaskDetail(task.id)">
+            <h4>{{ task.title }}</h4>
+            <p *ngIf="task.teamName" class="team-name">チーム: {{ task.teamName }}</p>
+            <p *ngIf="task.description">{{ task.description }}</p>
+            <div class="task-meta">
+              <div class="task-meta-left">
+                <span class="status status-{{ task.status }}">{{ getStatusLabel(task.status) }}</span>
+                <span class="due-date">期限: {{ formatDate(task.endDate) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- 次やるタスクモーダル -->
+<app-next-task-candidates
+  [showModal]="showNextTaskCandidates"
+  (closeModal)="closeNextTaskCandidates()">
+</app-next-task-candidates>
+

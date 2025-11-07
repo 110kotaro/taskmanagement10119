@@ -1,0 +1,38 @@
+<div class="modal-overlay" *ngIf="showModal" (click)="close()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>次やるタスク</h2>
+      <button class="close-btn" (click)="close()">×</button>
+    </div>
+    
+    <div class="modal-body">
+      <div *ngIf="isLoading" class="loading">読み込み中...</div>
+      
+      <div *ngIf="!isLoading && candidates.length === 0" class="no-candidates">
+        次やるタスクが見つかりませんでした
+      </div>
+      
+      <div *ngIf="!isLoading && candidates.length > 0" class="candidates-list">
+        <div 
+          *ngFor="let candidate of candidates; let i = index" 
+          class="candidate-item"
+          (click)="selectTask(candidate.id)">
+          <div class="candidate-number">{{ i + 1 }}</div>
+          <div class="candidate-content">
+            <h3>{{ candidate.title }}</h3>
+            <div class="candidate-meta">
+              <span class="status status-{{ candidate.status }}">{{ getStatusLabel(candidate.status) }}</span>
+              <span class="priority priority-{{ candidate.priority }}">{{ getPriorityLabel(candidate.priority) }}</span>
+              <span class="due-date">期限: {{ formatDate(candidate.endDate) }}</span>
+            </div>
+            <p *ngIf="candidate.description" class="candidate-description">{{ candidate.description }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="modal-footer">
+      <button class="close-button" (click)="close()">閉じる</button>
+    </div>
+  </div>
+</div>

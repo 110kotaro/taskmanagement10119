@@ -1,0 +1,231 @@
+<div class="task-create-container">
+  <div class="task-create-card">
+    <div class="header">
+      <button class="back-btn" (click)="goBack()">← 戻る</button>
+      <h1>タスク作成</h1>
+    </div>
+
+    <form [formGroup]="createForm" (ngSubmit)="onCreate()">
+      <div class="form-group">
+        <label for="title">タイトル *</label>
+        <input type="text" id="title" formControlName="title" placeholder="タスクのタイトルを入力">
+      </div>
+
+      <div class="form-group">
+        <label for="description">説明</label>
+        <textarea id="description" formControlName="description" rows="4" placeholder="タスクの詳細説明"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="memo">メモ</label>
+        <textarea id="memo" formControlName="memo" rows="3" placeholder="メモを入力"></textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="status">ステータス *</label>
+          <select id="status" formControlName="status">
+            <option value="not_started">未着手</option>
+            <option value="in_progress">進行中</option>
+            <option value="completed">完了</option>
+          </select>
+        </div>
+
+               <div class="form-group">
+                 <label for="priority">優先度 *</label>
+                 <select id="priority" formControlName="priority">
+                   <option value="important">重要</option>
+                   <option value="normal">普通</option>
+                   <option value="low">低め</option>
+                   <option value="none">なし</option>
+                   <option value="custom">カスタム</option>
+                 </select>
+               </div>
+             </div>
+
+             <!-- カスタム優先度 -->
+             <div class="form-group" *ngIf="createForm.get('priority')?.value === 'custom'">
+               <label for="customPriority">カスタム優先度名</label>
+               <input type="text" id="customPriority" formControlName="customPriority" placeholder="例: 緊急">
+             </div>
+
+      <!-- タスクタイプ -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="taskType">タスクタイプ</label>
+          <select id="taskType" formControlName="taskType">
+            <option value="normal">通常</option>
+            <option value="meeting">会議</option>
+            <option value="regular">定期</option>
+            <option value="project">プロジェクト</option>
+            <option value="other">その他</option>
+            <option value="custom">カスタム設定</option>
+          </select>
+        </div>
+
+        <div class="form-group" *ngIf="createForm.get('taskType')?.value === 'custom'">
+          <label for="customTaskTypeName">カスタムタスクタイプ名</label>
+          <input type="text" id="customTaskTypeName" formControlName="customTaskType" placeholder="例: リサーチ、レビューなど">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="startDate">開始日 *</label>
+          <input type="date" id="startDate" formControlName="startDate">
+        </div>
+
+        <div class="form-group">
+          <label for="startTime">開始時間（任意）</label>
+          <input type="time" id="startTime" formControlName="startTime">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="endDate">期限 *</label>
+          <input type="date" id="endDate" formControlName="endDate">
+        </div>
+
+        <div class="form-group">
+          <label for="endTime">終了時間（任意）</label>
+          <input type="time" id="endTime" formControlName="endTime">
+        </div>
+      </div>
+
+      <!-- チームモード時にチーム名を表示 -->
+      <div class="form-group" *ngIf="viewMode === 'team' && selectedTeam">
+        <label>チーム</label>
+        <div class="selected-team-info">
+          👥 {{ selectedTeam.name }}
+        </div>
+      </div>
+
+      <!-- 個人モードの場合は担当者を非表示（作成者自身に固定） -->
+      <div class="form-group" *ngIf="viewMode === 'team'">
+        <label for="assigneeId">担当者（オプション）</label>
+        <select id="assigneeId" formControlName="assigneeId">
+          <option value="">担当者なし</option>
+          <option *ngFor="let member of teamMembers" [value]="member.userId">
+            {{ member.userName || member.userEmail }}
+          </option>
+        </select>
+      </div>
+      <!-- 個人モードの場合は担当者情報を非表示（作成者自身に固定） -->
+      <div class="form-group" *ngIf="viewMode === 'personal'">
+        <p class="info-text">個人タスク: 担当者は作成者（あなた）に自動設定されます</p>
+      </div>
+
+      <!-- プロジェクトが既に選択されている場合（クエリパラメータから来た場合） -->
+      <div class="form-group" *ngIf="createForm.get('projectId')?.value">
+        <label>プロジェクト</label>
+        <div class="selected-project-info">
+          📁 {{ getSelectedProjectName() }}
+        </div>
+      </div>
+
+      <!-- プロジェクトが選択されていない場合のみ選択可能 -->
+      <div class="form-group" *ngIf="!createForm.get('projectId')?.value">
+        <label for="projectId">プロジェクト（オプション）</label>
+        <select id="projectId" formControlName="projectId">
+          <option value="">プロジェクトなし</option>
+          <option *ngFor="let project of projects" [value]="project.id">
+            {{ project.name }}
+          </option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="recurrence">繰り返し</label>
+        <select id="recurrence" formControlName="recurrence">
+          <option value="none">繰り返さない</option>
+          <option value="daily">毎日</option>
+          <option value="weekly">毎週</option>
+          <option value="biweekly">隔週</option>
+          <option value="monthly">毎月</option>
+          <option value="yearly">毎年</option>
+        </select>
+      </div>
+
+      <div class="form-group" *ngIf="createForm.get('recurrence')?.value !== 'none'">
+        <label for="recurrenceEndDate">繰り返し終了日（オプション）</label>
+        <input type="date" id="recurrenceEndDate" formControlName="recurrenceEndDate">
+      </div>
+
+      <!-- リマインダー設定 -->
+      <div class="form-group">
+        <h3>リマインダー設定</h3>
+      </div>
+
+      <!-- 開始前のリマインダー -->
+      <div class="form-group">
+        <label>
+          <input type="checkbox" formControlName="enableStartReminder"> 開始前のリマインダーを設定
+        </label>
+      </div>
+
+      <div class="form-group" *ngIf="createForm.get('enableStartReminder')?.value">
+        <label for="startReminderType">開始前のリマインダー</label>
+        <select id="startReminderType" formControlName="startReminderType">
+          <option value="1day">1日前</option>
+          <option value="3hour">3時間前</option>
+          <option value="1hour">1時間前</option>
+          <option value="30min">30分前</option>
+          <option value="15min">15分前</option>
+          <option value="10min">10分前</option>
+          <option value="5min">5分前</option>
+          <option value="1min">1分前</option>
+        </select>
+      </div>
+
+      <!-- 期限前のリマインダー -->
+      <div class="form-group">
+        <label>
+          <input type="checkbox" formControlName="enableEndReminder"> 期限前のリマインダーを設定
+        </label>
+      </div>
+
+      <div class="form-group" *ngIf="createForm.get('enableEndReminder')?.value">
+        <label for="endReminderType">期限前のリマインダー</label>
+        <select id="endReminderType" formControlName="endReminderType">
+          <option value="1day">1日前</option>
+          <option value="3hour">3時間前</option>
+          <option value="1hour">1時間前</option>
+          <option value="30min">30分前</option>
+          <option value="15min">15分前</option>
+          <option value="10min">10分前</option>
+          <option value="5min">5分前</option>
+          <option value="1min">1分前</option>
+        </select>
+      </div>
+
+      <!-- カスタム設定のリマインダー -->
+      <div class="form-group">
+        <label>
+          <input type="checkbox" formControlName="enableCustomReminder"> カスタム設定でリマインダーを設定
+        </label>
+      </div>
+
+      <div class="form-group" *ngIf="createForm.get('enableCustomReminder')?.value">
+        <label for="customReminderDateTime">リマインダー日時</label>
+        <input type="datetime-local" id="customReminderDateTime" formControlName="customReminderDateTime">
+        </div>
+
+      <!-- 進捗率表示設定 -->
+      <div class="form-group">
+        <label>
+          <input type="checkbox" formControlName="showProgress"> 進捗率を表示する
+        </label>
+        <small class="form-hint">※ 進捗率を表示する場合のみサブタスクが利用可能です</small>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="cancel-btn" (click)="goBack()">キャンセル</button>
+        <button type="submit" class="create-btn" [disabled]="createForm.invalid || isCreating">
+          {{ isCreating ? '作成中...' : '作成' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+

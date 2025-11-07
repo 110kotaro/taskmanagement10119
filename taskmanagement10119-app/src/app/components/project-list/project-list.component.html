@@ -1,0 +1,43 @@
+<div class="project-list-container">
+  <header class="header">
+    <button class="back-btn" (click)="goBack()">← 戻る</button>
+    <h1>プロジェクト一覧</h1>
+    <button class="create-btn" (click)="openCreateModal()">+ プロジェクト作成</button>
+  </header>
+
+  <main class="main-content">
+    <div *ngIf="isLoading" class="loading">読み込み中...</div>
+    <div *ngIf="!isLoading && projects.length === 0" class="no-projects">
+      プロジェクトはありません
+    </div>
+
+    <div class="project-list">
+      <div *ngFor="let project of projects" class="project-card" (click)="viewProject(project.id)">
+        <h2>{{ project.name }}</h2>
+        <p *ngIf="project.description">{{ project.description }}</p>
+        <div class="project-meta">
+          <div class="meta-item">
+            <span class="label">期間:</span>
+            <span>{{ formatDate(project.startDate) }} ～ {{ formatDate(project.endDate) }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="label">進捗率:</span>
+            <div class="progress-bar">
+              <div class="progress-fill" [style.width.%]="project.completionRate"></div>
+            </div>
+            <span>{{ project.completionRate }}%</span>
+          </div>
+          <div class="meta-item">
+            <span class="label">タスク:</span>
+            <span>{{ project.completedTasks }} / {{ project.totalTasks }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="label">ステータス:</span>
+            <span class="status-badge status-{{ project.status }}">{{ getStatusLabel(project.status) }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+

@@ -1,0 +1,195 @@
+<div class="account-container">
+  <header class="header">
+    <button class="back-btn" (click)="goBack()">← 戻る</button>
+    <h1>👤 アカウント情報</h1>
+  </header>
+
+  <main class="main-content">
+    <div class="account-section">
+      <h2>ユーザー情報</h2>
+      
+      <!-- エラー・成功メッセージ -->
+      <div class="message error" *ngIf="errorMessage">
+        <span>❌</span>
+        <span>{{ errorMessage }}</span>
+      </div>
+      <div class="message success" *ngIf="successMessage">
+        <span>✅</span>
+        <span>{{ successMessage }}</span>
+      </div>
+
+      <!-- アバター画像 -->
+      <div class="info-item">
+        <label class="info-label">アバター画像</label>
+        <div class="avatar-section">
+          <div class="avatar-preview" *ngIf="!isEditingAvatar">
+            <img [src]="photoURL || 'https://via.placeholder.com/100'" 
+                 [alt]="displayName" 
+                 class="avatar-image"
+                 (error)="($any($event.target)).src='https://via.placeholder.com/100'">
+            <button class="edit-btn" (click)="startEditAvatar()">編集</button>
+          </div>
+          <div class="avatar-edit" *ngIf="isEditingAvatar">
+            <div class="file-upload-section">
+              <label class="file-upload-label">
+                <input type="file" 
+                       accept="image/*" 
+                       (change)="onFileSelected($event)"
+                       class="file-input"
+                       [disabled]="isUploading">
+                <span class="file-upload-text">
+                  {{ selectedFile ? selectedFile.name : '📁 画像ファイルを選択' }}
+                </span>
+              </label>
+              <div class="or-divider">または</div>
+              <input type="text" 
+                     [(ngModel)]="photoURL" 
+                     placeholder="画像URLを入力"
+                     class="avatar-input"
+                     [disabled]="isUploading">
+            </div>
+            <div class="avatar-preview-edit" *ngIf="photoURL">
+              <img [src]="photoURL" 
+                   [alt]="displayName" 
+                   class="avatar-preview-image"
+                   (error)="($any($event.target)).src='https://via.placeholder.com/100'">
+            </div>
+            <div class="avatar-actions">
+              <button class="save-btn" 
+                      (click)="saveAvatar()" 
+                      [disabled]="isUploading">
+                {{ isUploading ? 'アップロード中...' : '保存' }}
+              </button>
+              <button class="cancel-btn" 
+                      (click)="cancelEditAvatar()"
+                      [disabled]="isUploading">
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 表示名 -->
+      <div class="info-item">
+        <label class="info-label">ユーザー名（表示名）</label>
+        <div class="info-content" *ngIf="!isEditingDisplayName">
+          <span class="info-value">{{ displayName || '-' }}</span>
+          <button class="edit-btn" (click)="startEditDisplayName()">編集</button>
+        </div>
+        <div class="info-edit" *ngIf="isEditingDisplayName">
+          <input type="text" 
+                 [(ngModel)]="displayName" 
+                 placeholder="表示名を入力"
+                 class="edit-input">
+          <div class="edit-actions">
+            <button class="save-btn" (click)="saveDisplayName()">保存</button>
+            <button class="cancel-btn" (click)="cancelEditDisplayName()">キャンセル</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- メールアドレス -->
+      <div class="info-item">
+        <label class="info-label">メールアドレス</label>
+        <div class="info-content" *ngIf="!isEditingEmail">
+          <span class="info-value">{{ email || '-' }}</span>
+          <button class="edit-btn" (click)="startEditEmail()">編集</button>
+        </div>
+        <div class="info-edit" *ngIf="isEditingEmail">
+          <label class="edit-label">新しいメールアドレス</label>
+          <input type="email" 
+                 [(ngModel)]="email" 
+                 placeholder="メールアドレスを入力"
+                 class="edit-input">
+          <label class="edit-label">現在のパスワード（確認用）</label>
+          <input type="password" 
+                 [(ngModel)]="currentPassword" 
+                 placeholder="現在のパスワードを入力"
+                 class="edit-input">
+          <div class="edit-actions">
+            <button class="save-btn" (click)="saveEmail()">保存</button>
+            <button class="cancel-btn" (click)="cancelEditEmail()">キャンセル</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ロール -->
+      <div class="info-item">
+        <label class="info-label">ロール</label>
+        <div class="info-content">
+          <span class="info-value">{{ user ? getRoleLabel(user.role) : '-' }}</span>
+        </div>
+      </div>
+
+      <!-- アカウント作成日 -->
+      <div class="info-item">
+        <label class="info-label">アカウント作成日</label>
+        <div class="info-content">
+          <span class="info-value">{{ user && user.createdAt ? formatDate(user.createdAt) : '-' }}</span>
+        </div>
+      </div>
+
+      <!-- パスワード変更 -->
+      <div class="info-item">
+        <label class="info-label">パスワード</label>
+        <div class="info-content" *ngIf="!isEditingPassword">
+          <span class="info-value">********</span>
+          <button class="edit-btn" (click)="startEditPassword()">変更</button>
+        </div>
+        <div class="info-edit" *ngIf="isEditingPassword">
+          <input type="password" 
+                 [(ngModel)]="currentPassword" 
+                 placeholder="現在のパスワード"
+                 class="edit-input">
+          <input type="password" 
+                 [(ngModel)]="newPassword" 
+                 placeholder="新しいパスワード"
+                 class="edit-input">
+          <input type="password" 
+                 [(ngModel)]="confirmPassword" 
+                 placeholder="新しいパスワード（確認）"
+                 class="edit-input">
+          <div class="edit-actions">
+            <button class="save-btn" (click)="savePassword()">保存</button>
+            <button class="cancel-btn" (click)="cancelEditPassword()">キャンセル</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-section">
+      <h2>アカウント操作</h2>
+      
+      <div class="action-buttons">
+        <button class="logout-btn" (click)="logout()">🚪 ログアウト</button>
+        <button class="delete-btn" (click)="showDeleteAccountDialog()">🗑️ アカウント削除</button>
+      </div>
+    </div>
+
+    <!-- アカウント削除確認ダイアログ -->
+    <div class="delete-dialog-overlay" *ngIf="showDeleteConfirm" (click)="cancelDeleteAccount()">
+      <div class="delete-dialog" (click)="$event.stopPropagation()">
+        <h3>⚠️ アカウント削除の確認</h3>
+        <p>この操作は取り消せません。すべてのデータが削除されます。</p>
+        <div class="delete-form">
+          <label>パスワードを入力してください</label>
+          <input type="password" 
+                 [(ngModel)]="deletePassword" 
+                 placeholder="パスワード"
+                 class="delete-input">
+          <label>確認のため「削除」と入力してください</label>
+          <input type="text" 
+                 [(ngModel)]="deleteConfirmText" 
+                 placeholder="削除"
+                 class="delete-input">
+          <div class="delete-actions">
+            <button class="confirm-delete-btn" (click)="confirmDeleteAccount()">削除</button>
+            <button class="cancel-delete-btn" (click)="cancelDeleteAccount()">キャンセル</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+

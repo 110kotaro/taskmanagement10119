@@ -1,0 +1,451 @@
+.team-detail-container {
+  min-height: 100vh;
+  background: var(--gradient-background);
+  padding: 2rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 3rem;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-lg);
+}
+
+.team-detail-card {
+  max-width: 1000px;
+  margin: 0 auto;
+  background: var(--color-surface);
+  padding: 2rem;
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-xl);
+}
+
+.header {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.header h1 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-xl);
+}
+
+.description {
+  color: var(--color-text-secondary);
+  margin: 0.5rem 0 0 0;
+}
+
+.back-btn {
+  padding: 0.5rem 1rem;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  margin-bottom: 1rem;
+  font-size: var(--font-size-base);
+  transition: background 0.2s;
+}
+
+.back-btn:hover {
+  background: var(--color-primary-dark);
+}
+
+.leave-btn {
+  padding: 0.5rem 1rem;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.leave-btn:hover {
+  background: #c82333;
+}
+
+.team-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: var(--color-background);
+  border-radius: var(--border-radius);
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.info-item .label {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  min-width: 100px;
+}
+
+.section {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: var(--color-background);
+  border-radius: var(--border-radius);
+}
+
+.section h2 {
+  margin: 0 0 1rem 0;
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+}
+
+.invite-form, .announcement-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.invite-input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-base);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.announcement-input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-base);
+  background: var(--color-surface);
+  color: var(--color-text);
+  resize: vertical;
+}
+
+.invite-btn, .announcement-btn {
+  padding: 0.75rem 1.5rem;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.invite-btn:hover:not(:disabled),
+.announcement-btn:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+}
+
+.invite-btn:disabled,
+.announcement-btn:disabled {
+  background: var(--color-border);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.link-invite-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.generate-link-btn {
+  padding: 0.75rem 1.5rem;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.generate-link-btn:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+}
+
+.generate-link-btn:disabled {
+  background: var(--color-border);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.invitation-link-display {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--color-background);
+  border-radius: var(--border-radius);
+  border: 2px solid var(--color-primary);
+}
+
+.link-label {
+  margin: 0 0 0.5rem 0;
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+.link-container {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.link-input {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.copy-btn, .close-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.copy-btn {
+  background: var(--color-primary);
+  color: white;
+}
+
+.copy-btn:hover {
+  background: var(--color-primary-dark);
+}
+
+.close-btn {
+  background: var(--color-text-secondary);
+  color: white;
+  padding: 0.5rem 0.75rem;
+}
+
+.close-btn:hover {
+  background: var(--color-text);
+}
+
+.member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.no-members {
+  text-align: center;
+  padding: 2rem;
+  color: var(--color-text-secondary);
+}
+
+.member-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
+  transition: all 0.2s;
+}
+
+.member-card:hover {
+  border-color: var(--color-primary);
+}
+
+.member-info {
+  flex: 1;
+}
+
+.member-name {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+  margin-bottom: 0.25rem;
+}
+
+.member-email {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin-bottom: 0.5rem;
+}
+
+.member-role {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.role-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.role-owner {
+  background: var(--color-primary);
+  color: white;
+}
+
+.role-admin {
+  background: var(--color-warning);
+  color: white;
+}
+
+.role-member {
+  background: var(--color-info);
+  color: white;
+}
+
+.role-viewer {
+  background: var(--color-text-secondary);
+  color: white;
+}
+
+.owner-badge {
+  padding: 0.25rem 0.75rem;
+  background: var(--color-primary);
+  color: white;
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.member-joined {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.member-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: fit-content;
+}
+
+.role-select {
+  padding: 0.5rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+  cursor: pointer;
+}
+
+.remove-btn {
+  padding: 0.5rem 1rem;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.remove-btn:hover {
+  background: #c82333;
+}
+
+.invitation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.invitation-card {
+  padding: 1rem;
+  background: var(--color-background);
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
+  transition: all 0.2s;
+}
+
+.invitation-card:hover {
+  border-color: var(--color-primary);
+}
+
+.invitation-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.invitation-email {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+}
+
+.invitation-type {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.type-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.email-type {
+  background: var(--color-info);
+  color: white;
+}
+
+.link-type {
+  background: var(--color-warning);
+  color: white;
+}
+
+.invitation-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.invitation-date, .invitation-expires {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+

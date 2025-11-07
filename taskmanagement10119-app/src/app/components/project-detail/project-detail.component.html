@@ -1,0 +1,377 @@
+<div class="project-detail-container">
+  <div *ngIf="isLoading" class="loading">読み込み中...</div>
+  
+  <div *ngIf="!isLoading && project" class="project-detail-card">
+    <!-- ヘッダー -->
+    <div class="header">
+      <button class="back-btn" (click)="goBack()">← 戻る</button>
+      <div class="header-content">
+        <h1>{{ project.name }}</h1>
+        <div class="header-actions">
+          <button class="edit-btn" *ngIf="canEdit" (click)="openEditModal()">編集</button>
+          <button class="duplicate-btn" (click)="onDuplicate()">複製</button>
+          <button class="delete-btn" *ngIf="canEdit" (click)="openDeleteModal()">削除</button>
+          <button class="create-task-btn" *ngIf="!isFromArchive" (click)="createTask()">+ タスク作成</button>
+        </div>
+        <div class="progress-info">
+          <div class="progress-bar">
+            <div class="progress-fill" [style.width.%]="project.completionRate"></div>
+          </div>
+          <span class="progress-text">{{ project.completionRate }}% 完了</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- プロジェクト情報 -->
+    <div class="project-info">
+      <div class="info-item">
+        <span class="label">期間:</span>
+        <span>{{ formatDate(project.startDate) }} ～ {{ formatDate(project.endDate) }}</span>
+      </div>
+      <div class="info-item" *ngIf="project.description">
+        <span class="label">説明:</span>
+        <p>{{ project.description }}</p>
+      </div>
+      <div class="info-item">
+        <span class="label">タスク:</span>
+        <span>{{ project.completedTasks }} / {{ project.totalTasks }} 完了</span>
+      </div>
+      <div class="info-item" *ngIf="project.teamName">
+        <span class="label">チーム:</span>
+        <span>{{ project.teamName }}</span>
+      </div>
+      <div class="info-item" *ngIf="project.assigneeName">
+        <span class="label">担当者:</span>
+        <span>{{ project.assigneeName }}</span>
+      </div>
+      <div class="info-item">
+        <span class="label">ステータス:</span>
+        <span class="status-badge status-{{ project.status }}">{{ getStatusLabel(project.status) }}</span>
+      </div>
+    </div>
+
+    <!-- タスク一覧 -->
+    <div class="tasks-section">
+      <h2>タスク一覧</h2>
+      <div *ngIf="tasks.length === 0" class="no-tasks">
+        タスクはありません
+      </div>
+      <div class="task-list">
+        <div *ngFor="let task of tasks" class="task-card" (click)="viewTask(task.id)">
+          <div class="task-header">
+            <h3>{{ task.title }}</h3>
+            <span class="status-badge status-{{ task.status }}">{{ getStatusLabel(task.status) }}</span>
+          </div>
+          <p *ngIf="task.description">{{ task.description }}</p>
+          <div class="task-meta">
+            <span class="due-date">期限: {{ formatDate(task.endDate) }}</span>
+            <span class="priority priority-{{ task.priority }}">{{ getPriorityLabel(task.priority) }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- メンバー管理セクション -->
+    <div class="members-section" *ngIf="project.members && project.members.length > 0">
+      <div class="section-header">
+        <h2>メンバー</h2>
+        <button 
+          *ngIf="canManageMembers && project.teamId" 
+          class="add-member-btn"
+          (click)="openMemberModal()"
+          [disabled]="teamMembers.length === 0">
+          + メンバー追加
+        </button>
+        <p *ngIf="canManageMembers && project.teamId && teamMembers.length === 0" class="no-members-message">
+          追加できるメンバーがいません
+        </p>
+      </div>
+      
+      <div class="members-list">
+        <div *ngFor="let member of project.members" class="member-card">
+          <div class="member-info">
+            <div class="member-name">{{ member.userName }}</div>
+            <div class="member-email">{{ member.userEmail }}</div>
+            <div class="member-role">
+              <span *ngIf="project.ownerId === member.userId" class="role-badge owner">オーナー</span>
+              <span *ngIf="project.ownerId !== member.userId" class="role-badge role-{{ member.role }}">
+                {{ getRoleLabel(member.role) }}
+              </span>
+            </div>
+          </div>
+          <div class="member-actions" *ngIf="canManageMembers">
+            <!-- 役割変更（オーナー以外） -->
+            <select 
+              *ngIf="project.ownerId !== member.userId"
+              class="role-select"
+              [ngModel]="member.role"
+              (ngModelChange)="onUpdateMemberRole(member.userId, $event)">
+              <!-- <option [ngValue]="ProjectRole.Admin">プロジェクト管理者</option> --> <!-- 削除 -->
+              <option [ngValue]="ProjectRole.Member">メンバー</option>
+              <option [ngValue]="ProjectRole.Viewer">閲覧者</option>
+            </select>
+            
+            <!-- 削除ボタン（オーナー以外、かつ自分以外） -->
+            <button 
+              *ngIf="project.ownerId !== member.userId && authService.currentUser?.uid !== member.userId"
+              class="remove-member-btn"
+              (click)="onRemoveMember(member.userId)">
+              削除
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ファイルセクション -->
+    <div class="files-section" *ngIf="!isFromArchive && canEdit">
+      <h2>ファイル</h2>
+      
+      <div class="file-upload">
+        <input 
+          type="file" 
+          multiple 
+          (change)="onFileSelected($event)"
+          id="fileInput"
+          style="display: none;">
+        <label for="fileInput" class="file-input-label">
+          📎 ファイルを選択
+        </label>
+        <button 
+          (click)="uploadFiles()" 
+          [disabled]="selectedFiles.length === 0 || isUploadingFiles"
+          class="upload-btn">
+          {{ isUploadingFiles ? 'アップロード中...' : 'アップロード' }}
+        </button>
+        <div *ngIf="selectedFiles.length > 0" class="selected-files">
+          選択済み: {{ selectedFiles.length }}個のファイル
+        </div>
+      </div>
+
+      <div class="files-list" *ngIf="project.files && project.files.length > 0">
+        <div *ngFor="let file of project.files" class="file-item">
+          <span class="file-name">{{ file.name }}</span>
+          <div class="file-actions">
+            <button class="download-btn" (click)="downloadFile(file.url, file.name)">ダウンロード</button>
+            <button class="delete-file-btn" (click)="deleteFile(file.id)">削除</button>
+          </div>
+        </div>
+      </div>
+      <div *ngIf="!project.files || project.files.length === 0" class="no-files">
+        ファイルはまだありません
+      </div>
+    </div>
+    
+    <!-- アーカイブから来た場合のファイル表示（読み取り専用） -->
+    <div class="files-section" *ngIf="isFromArchive">
+      <h2>ファイル</h2>
+      <div class="files-list" *ngIf="project.files && project.files.length > 0">
+        <div *ngFor="let file of project.files" class="file-item">
+          <span class="file-name">{{ file.name }}</span>
+          <div class="file-actions">
+            <button class="download-btn" (click)="downloadFile(file.url, file.name)">ダウンロード</button>
+          </div>
+        </div>
+      </div>
+      <div *ngIf="!project.files || project.files.length === 0" class="no-files">
+        ファイルはまだありません
+      </div>
+    </div>
+
+    <!-- メンバー追加モーダル -->
+    <div *ngIf="showMemberModal" class="modal-overlay" (click)="closeMemberModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>メンバー追加</h2>
+          <button class="close-btn" (click)="closeMemberModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="memberSelect">メンバーを選択</label>
+            <select 
+              id="memberSelect"
+              class="form-control"
+              [value]="selectedMemberId"
+              (change)="selectedMemberId = $any($event.target).value"
+              [disabled]="teamMembers.length === 0">
+              <option [value]="''">メンバーを選択</option>
+              <option *ngFor="let member of teamMembers" [value]="member.userId">
+                {{ member.userName }} ({{ member.userEmail }})
+              </option>
+            </select>
+            <p *ngIf="teamMembers.length === 0" class="info-text">
+              チームの全メンバーが既にプロジェクトに追加されています
+            </p>
+          </div>
+          <div class="form-group">
+            <label for="roleSelect">役割</label>
+            <select 
+              id="roleSelect"
+              class="form-control"
+              [value]="selectedRole"
+              (change)="selectedRole = $any($event.target).value">
+              <!-- <option [value]="ProjectRole.Admin">プロジェクト管理者</option> --> <!-- 削除 -->
+              <option [value]="ProjectRole.Member">メンバー</option>
+              <option [value]="ProjectRole.Viewer">閲覧者</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeMemberModal()">キャンセル</button>
+          <button 
+            class="btn-primary" 
+            [disabled]="!selectedMemberId"
+            (click)="onAddMember()">
+            追加
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 編集モーダル -->
+    <div *ngIf="showEditModal" class="modal-overlay" (click)="closeEditModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>プロジェクト編集</h2>
+          <button class="close-btn" (click)="closeEditModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <!-- タイトル -->
+          <div class="form-group">
+            <label for="editName">タイトル *</label>
+            <input 
+              type="text" 
+              id="editName" 
+              class="form-control"
+              [(ngModel)]="editFormData.name"
+              required>
+          </div>
+          
+          <!-- 期間 -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="editStartDate">開始日 *</label>
+              <input 
+                type="date" 
+                id="editStartDate" 
+                class="form-control"
+                [(ngModel)]="editFormData.startDate"
+                required>
+            </div>
+            <div class="form-group">
+              <label for="editEndDate">終了日 *</label>
+              <input 
+                type="date" 
+                id="editEndDate" 
+                class="form-control"
+                [(ngModel)]="editFormData.endDate"
+                required>
+            </div>
+          </div>
+          
+          <!-- ステータス -->
+          <div class="form-group">
+            <label for="editStatus">ステータス *</label>
+            <select 
+              id="editStatus" 
+              class="form-control"
+              [(ngModel)]="editFormData.status"
+              required>
+              <option [ngValue]="ProjectStatus.NotStarted">準備中</option>
+              <option [ngValue]="ProjectStatus.InProgress">進行中</option>
+              <option [ngValue]="ProjectStatus.Completed">完了</option>
+            </select>
+          </div>
+          
+          <!-- 担当者選択（チームプロジェクトの場合のみ） -->
+          <div class="form-group" *ngIf="project.teamId && editTeamMembers.length > 0">
+            <label for="editAssigneeId">担当者</label>
+            <select 
+              id="editAssigneeId" 
+              class="form-control"
+              [(ngModel)]="editFormData.assigneeId">
+              <option value="">担当者を選択（任意）</option>
+              <option *ngFor="let member of editTeamMembers" [value]="member.userId">
+                {{ member.userName }}
+              </option>
+            </select>
+          </div>
+          
+          <!-- 個人プロジェクトの場合 -->
+          <div class="form-group" *ngIf="!project.teamId">
+            <p class="info-text">個人プロジェクト: 担当者は設定できません</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeEditModal()">キャンセル</button>
+          <button class="btn-primary" (click)="onUpdateProject()">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 削除モーダル -->
+    <div *ngIf="showDeleteModal" class="modal-overlay" (click)="closeDeleteModal()">
+      <div class="modal-content delete-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>プロジェクト削除</h2>
+          <button class="close-btn" (click)="closeDeleteModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="warning-text">プロジェクト「{{ project.name }}」を削除しますか？</p>
+          
+          <div class="form-group">
+            <label>配下のタスクの扱い</label>
+            <div class="radio-group">
+              <label class="radio-option">
+                <input 
+                  type="radio" 
+                  name="taskDeletionMode" 
+                  value="all"
+                  [(ngModel)]="taskDeletionMode">
+                <span>すべて削除（アーカイブに移動）</span>
+              </label>
+              <label class="radio-option">
+                <input 
+                  type="radio" 
+                  name="taskDeletionMode" 
+                  value="partial"
+                  [(ngModel)]="taskDeletionMode">
+                <span>一部削除（削除するタスクを選択）</span>
+              </label>
+              <label class="radio-option">
+                <input 
+                  type="radio" 
+                  name="taskDeletionMode" 
+                  value="none"
+                  [(ngModel)]="taskDeletionMode">
+                <span>削除しない（プロジェクト未所属に変更）</span>
+              </label>
+            </div>
+          </div>
+          
+          <!-- 一部削除の場合のタスク選択 -->
+          <div *ngIf="taskDeletionMode === 'partial' && tasks.length > 0" class="task-selection">
+            <label>削除するタスクを選択（{{ selectedTaskIdsForDeletion.size }}件選択中）</label>
+            <div class="task-checkbox-list">
+              <label *ngFor="let task of tasks" class="task-checkbox-item">
+                <input 
+                  type="checkbox"
+                  [checked]="selectedTaskIdsForDeletion.has(task.id)"
+                  (change)="toggleTaskSelection(task.id)">
+                <span>{{ task.title }}</span>
+                <span class="task-status">（{{ getStatusLabel(task.status) }}）</span>
+              </label>
+            </div>
+          </div>
+          
+          <p class="info-text">削除されたプロジェクトはアーカイブに移動し、復元可能です。</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeDeleteModal()">キャンセル</button>
+          <button class="btn-danger" (click)="onDeleteProject()">削除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+

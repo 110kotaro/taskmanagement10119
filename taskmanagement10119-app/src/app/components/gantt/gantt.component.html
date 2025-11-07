@@ -1,0 +1,332 @@
+<div class="gantt-container">
+  <div class="gantt-header">
+    <div class="gantt-header-left">
+    <button class="back-btn" (click)="goBack()">← 戻る</button>
+    <h1>ガントチャート</h1>
+    </div>
+    <div class="gantt-header-right">
+      <div class="view-mode-switcher">
+        <button 
+          class="mode-btn" 
+          [class.active]="viewMode === 'tasks'"
+          (click)="switchView('tasks')">
+          タスク
+        </button>
+        <button 
+          class="mode-btn" 
+          [class.active]="viewMode === 'projects'"
+          (click)="switchView('projects')">
+          プロジェクト
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="main-content">
+  <div class="gantt-card">
+
+    <div *ngIf="isLoading" class="loading">読み込み中...</div>
+
+    <div *ngIf="!isLoading && dateRange && customDateRange && dateColumns.length > 0" class="gantt-content">
+
+      
+
+      <!-- 凡例 -->
+      <div class="legend">
+        <ng-container *ngIf="viewMode === 'tasks'">
+          <div class="legend-item">
+            <span class="legend-dot" style="background-color: #2196F3;"></span>
+            <span>未着手</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot" style="background-color: #FF9800;"></span>
+            <span>進行中</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot" style="background-color: #4CAF50;"></span>
+            <span>完了</span>
+          </div>
+        </ng-container>
+        <ng-container *ngIf="viewMode === 'projects'">
+          <div class="legend-item">
+            <span class="legend-dot" style="background-color: rgb(33, 150, 243);"></span>
+            <span>未開始（0%）</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot" style="background-color: rgb(173, 216, 243);"></span>
+            <span>開始済み（0-30%）</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot" style="background-color: rgb(173, 166, 0);"></span>
+            <span>進行中（30-60%）</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot" style="background-color: rgb(255, 128, 0);"></span>
+            <span>後半（60-85%）</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot" style="background-color: rgb(76, 175, 80);"></span>
+            <span>ほぼ完了（85-100%）</span>
+          </div>
+        </ng-container>
+      </div>
+
+      
+      <!-- ナビゲーションコントロール -->
+      <div class="gantt-nav-controls">
+        <!-- 表示期間選択 -->
+        <div class="display-period-selector">
+        <label>表示期間:</label>
+        <select [value]="displayPeriod" (change)="setDisplayPeriod($any($event.target).value)">
+          <option value="week">1週間</option>
+          <option value="twoWeeks">2週間</option>
+          <option value="month">1か月</option>
+        </select>
+        </div>
+        <div class="period-change-container">
+        <button class="nav-btn" (click)="moveWeekBackward()">
+          {{ displayPeriod === 'month' ? '← 前の月' : displayPeriod === 'twoWeeks' ? '← 2週間前' : '← 1週間前' }}
+        </button>
+        <button class="nav-btn" (click)="moveToCurrentWeek()">
+          {{ displayPeriod === 'month' ? '今月' : '今週' }}
+        </button>
+        <button class="nav-btn" (click)="moveWeekForward()">
+          {{ displayPeriod === 'month' ? '次の月 →' : displayPeriod === 'twoWeeks' ? '2週間後 →' : '1週間後 →' }}
+        </button>
+        </div>
+      </div>
+      
+
+      <!-- ガントチャート -->
+      <div class="gantt-chart-wrapper" ><!--(scroll)="onScroll($event)"-->
+        <!-- スクロールバー表示用の全期間幅要素 
+        <div class="gantt-scroll-area" [style.width]="getScrollbarWidth()"></div> -->
+        <div class="gantt-chart" [style.grid-template-columns]="getGridTemplateColumns()">
+          <!-- ヘッダー行 -->
+          <div class="grid-task-label-header"
+          [style.grid-row]="getHeaderRow()">タスク</div>
+
+          <!-- 月表示行（1週間・2週間モードのみ） -->
+          <div class="grid-month-label-header" 
+               [style.grid-row]="1" 
+               *ngIf="displayPeriod==='week' || displayPeriod==='twoWeeks'"></div>
+          <ng-container *ngIf="displayPeriod==='week' || displayPeriod==='twoWeeks'">
+            <ng-container *ngFor="let date of dateColumns; let i = index">
+              <div class="grid-month-label-span"
+                   *ngIf="shouldShowMonthLabel(date, i)"
+                   [style.grid-column]="getMonthColumnSpan(i)?.startCol + ' / span ' + getMonthColumnSpan(i)?.span"
+                   [style.grid-row]="1"
+                   [class.month-end]="i === dateColumns.length - 1 || shouldShowMonthLabel(dateColumns[i + 1], i + 1)">
+                <span class="month-label">{{ formatMonthLabel(date) }}</span>
+              </div>
+            </ng-container>
+          </ng-container>
+
+           <!--日付ヘッダー行-->
+          <div class="grid-date-column" [class.today]="isToday(date)" 
+            [style.grid-row]="getHeaderRow()"
+            *ngFor="let date of dateColumns">
+            <span class="date-label" [title]="formatDateFull(date)">{{ formatDay(date) }}</span>
+          </div>
+      
+          <!-- タスク行 -->
+          <ng-container *ngIf="viewMode === 'tasks'">
+            <ng-container *ngIf="ganttTasks.length > 0">
+              <ng-container *ngFor="let ganttTask of ganttTasks; let rowIndex = index">
+
+              <!-- タスクラベル -->
+              <div class="grid-task-label" 
+                [style.grid-column]="1"
+                [style.grid-row]="getGridRow(rowIndex)">
+                <span class="status-dot" [style.background-color]="getStatusColor(ganttTask.task.status)"></span>
+                <span class="task-title" (click)="viewTask(ganttTask.task.id)">{{ ganttTask.task.title }}</span>
+              </div>
+              
+              <!-- 各日付列（背景用、二列目以降）-->
+              <div class="grid-date-cell" 
+                [class.today]="isToday(date)" 
+                [style.grid-row]="getGridRow(rowIndex)"
+                [style.grid-column]="i+2"
+                *ngFor="let date of dateColumns; let i = index">
+                <!--空のセル（背景のみ）-->
+              </div>
+
+              <!-- バー本体 -->
+                <div class="grid-bar-overlay" 
+                     [style.grid-column]="getBarGridColumn(ganttTask)"
+                     [style.grid-row]="getGridRow(rowIndex)">
+                  <div class="grid-bar-unified"
+                     [style.background-color]="getStatusColor(ganttTask.task.status)"
+                     [class.truncated-start]="ganttTask.isStartTruncated"
+                     [class.truncated-end]="ganttTask.isEndTruncated"
+                     [class.dragging]="isDragging && draggingTaskId === ganttTask.task.id"
+                     (mouseenter)="onTaskHover($event, ganttTask)"
+                     (mouseleave)="onTaskLeave()"
+                     (mousedown)="onBarDragStart($event, ganttTask.task.id, ganttTask.task.startDate.toDate(), ganttTask.task.endDate.toDate())">
+                    <!-- 左端ドラッグハンドル -->
+                    <div class="drag-handle drag-handle-start"
+                         *ngIf="!ganttTask.isStartTruncated"
+                         (mousedown)="onDragStart($event, ganttTask.task.id, ganttTask.task.startDate.toDate())"
+                         (click)="$event.stopPropagation()">
+                    </div>
+                    <span class="bar-duration">
+                      {{ ganttTask.actualDurationDays ? ganttTask.actualDurationDays : ganttTask.durationDays }}日
+                    </span>
+                    <!-- 右端ドラッグハンドル -->
+                    <div class="drag-handle drag-handle-end"
+                         *ngIf="!ganttTask.isEndTruncated"
+                         (mousedown)="onDragEndStart($event, ganttTask.task.id, ganttTask.task.endDate.toDate())"
+                         (click)="$event.stopPropagation()">
+                    </div>
+                  </div>
+                </div>
+              </ng-container>
+            </ng-container>
+            <!-- タスクがない場合 -->
+            <ng-container *ngIf="ganttTasks.length === 0">
+              <div class="grid-task-label" [style.grid-column]="1" [style.grid-row]="getGridRow(0)">
+                <span class="task-title no-tasks-label">タスクがありません</span>
+              </div>
+              <div class="grid-date-cell" 
+                [class.today]="isToday(date)" 
+                [style.grid-row]="getGridRow(0)"
+                [style.grid-column]="i+2"
+                *ngFor="let date of dateColumns; let i = index">
+              </div>
+            </ng-container>
+          </ng-container>
+
+          <!-- プロジェクト行 -->
+          <ng-container *ngIf="viewMode === 'projects'">
+            <ng-container *ngIf="ganttProjects.length > 0">
+              <ng-container *ngFor="let ganttProject of ganttProjects; let rowIndex = index">
+              <!-- プロジェクトラベル -->
+              <div class="grid-task-label" [style.grid-column]="1" [style.grid-row]="getGridRow(rowIndex)">
+                <span class="status-dot" [style.background-color]="getProjectColor(ganttProject.project.completionRate)"></span>
+                <span class="task-title" (click)="viewProject(ganttProject.project.id)">{{ ganttProject.project.name }}</span>
+              </div>
+              
+              <!-- 各日付セル -->
+              <div class="grid-date-cell" 
+                [class.today]="isToday(date)"
+                [style.grid-column]="i+2" 
+                [style.grid-row]="getGridRow(rowIndex)"
+                *ngFor="let date of dateColumns; let i = index">
+               <!--空のセル（背景のみ）-->
+              </div>
+
+              <!-- バー本体 -->
+                <div class="grid-bar-overlay" 
+                     [style.grid-column]="getBarGridColumn(ganttProject)"
+                     [style.grid-row]="getGridRow(rowIndex)"
+                     (click)="viewProject(ganttProject.project.id)">
+                  <div class="grid-bar-unified"   
+                     [style.background-color]="getProjectColor(ganttProject.project.completionRate)"
+                     [class.truncated-start]="ganttProject.isStartTruncated"
+                     [class.truncated-end]="ganttProject.isEndTruncated"
+                     (mouseenter)="onProjectHover($event, ganttProject)"
+                     (mouseleave)="onProjectLeave()">   
+                    <span class="bar-duration">
+                      {{ ganttProject.durationDays }}日
+                    </span>
+                  </div>
+                </div>
+              </ng-container>
+            </ng-container>
+            <!-- プロジェクトがない場合 -->
+            <ng-container *ngIf="ganttProjects.length === 0">
+              <div class="grid-task-label" [style.grid-column]="1" [style.grid-row]="getGridRow(0)">
+                <span class="task-title no-tasks-label">プロジェクトがありません</span>
+              </div>
+              <div class="grid-date-cell" 
+                [class.today]="isToday(date)" 
+                [style.grid-row]="getGridRow(0)"
+                [style.grid-column]="i+2"
+                *ngFor="let date of dateColumns; let i = index">
+              </div>
+            </ng-container>
+          </ng-container>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- タスクツールチップ -->
+  <div class="task-tooltip" 
+       *ngIf="hoveredTask"
+       [style.left.px]="tooltipPosition.x"
+       [style.top.px]="tooltipPosition.y">
+    <div class="tooltip-content">
+      <div class="tooltip-row">
+        <span class="tooltip-label">タスク名:</span>
+        <span class="tooltip-value">{{ hoveredTask.task.title }}</span>
+      </div>
+      <div class="tooltip-row">
+        <span class="tooltip-label">重要度:</span>
+        <span class="tooltip-value">{{ getPriorityLabel(hoveredTask.task.priority) }}</span>
+      </div>
+      <div class="tooltip-row">
+        <span class="tooltip-label">担当者:</span>
+        <span class="tooltip-value">{{ hoveredTask.task.assigneeName || '未設定' }}</span>
+      </div>
+      <div class="tooltip-row">
+        <span class="tooltip-label">進捗率:</span>
+        <span class="tooltip-value">{{ getProgressPercentage(hoveredTask.task) }}%</span>
+      </div>
+      <div class="tooltip-row">
+        <span class="tooltip-label">期間:</span>
+        <span class="tooltip-value">{{ formatTaskPeriod(hoveredTask.task) }}</span>
+      </div>
+      <div class="tooltip-row">
+        <span class="tooltip-label">プロジェクト名:</span>
+        <span class="tooltip-value">{{ hoveredTask.task.projectName || '未設定' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- プロジェクトツールチップ -->
+  <div class="task-tooltip" 
+       *ngIf="hoveredProject"
+       [style.left.px]="tooltipPosition.x"
+       [style.top.px]="tooltipPosition.y">
+    <div class="tooltip-content">
+      <div class="tooltip-row">
+        <span class="tooltip-label">プロジェクト名:</span>
+        <span class="tooltip-value">{{ hoveredProject.project.name }}</span>
+      </div>
+      <div class="tooltip-row">
+        <span class="tooltip-label">進捗率:</span>
+        <span class="tooltip-value">
+          {{ hoveredProject.project.completionRate }}%
+          ( {{ hoveredProject.project.completedTasks }} / {{ hoveredProject.project.totalTasks }} 完了 )
+        </span>
+      </div>
+      <div class="tooltip-row">
+        <span class="tooltip-label">期間:</span>
+        <span class="tooltip-value">{{ formatProjectPeriod(hoveredProject.project) }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 日付編集ダイアログ（1か月表示時） -->
+  <div class="date-edit-dialog-overlay" *ngIf="showDateEditDialog" (click)="cancelDateEdit()">
+    <div class="date-edit-dialog" (click)="$event.stopPropagation()">
+      <h3>期間を詳細に設定</h3>
+      <div class="dialog-content" *ngIf="editingStartDate && editingEndDate">
+        <div class="form-group">
+          <label>開始日:</label>
+          <input type="date" [value]="formatDateForInput(editingStartDate)" (input)="onStartDateChange($any($event.target).value)">
+        </div>
+        <div class="form-group">
+          <label>終了日:</label>
+          <input type="date" [value]="formatDateForInput(editingEndDate)" (input)="onEndDateChange($any($event.target).value)">
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn-cancel" (click)="cancelDateEdit()">キャンセル</button>
+        <button class="btn-confirm" (click)="confirmDateEdit()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+

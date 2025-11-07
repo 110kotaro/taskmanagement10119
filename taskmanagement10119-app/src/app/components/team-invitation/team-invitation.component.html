@@ -1,0 +1,88 @@
+<div class="team-invitation-container">
+  <div class="team-invitation-card">
+    <div *ngIf="isLoading" class="loading">読み込み中...</div>
+    
+    <div *ngIf="!isLoading && errorMessage && !invitationInfo" class="error-message">
+      <h2>エラー</h2>
+      <p>{{ errorMessage }}</p>
+      <button class="back-btn" (click)="goBack()">ログイン画面に戻る</button>
+    </div>
+
+    <div *ngIf="!isLoading && invitationInfo && !errorMessage">
+      <div class="header">
+        <h1>チーム招待</h1>
+        <p class="invitation-info">
+          <strong>{{ invitationInfo.invitedByName }}</strong>がチーム「<strong>{{ invitationInfo.teamName }}</strong>」にあなたを招待しました
+        </p>
+      </div>
+
+      <form (ngSubmit)="onSubmit()" class="invitation-form">
+        <div class="form-group">
+          <label>
+            <input 
+              type="radio" 
+              name="userType" 
+              [value]="false"
+              [checked]="!isNewUser"
+              (change)="isNewUser = false">
+            <span>既存ユーザーでログイン</span>
+          </label>
+          <label>
+            <input 
+              type="radio" 
+              name="userType" 
+              [value]="true"
+              [checked]="isNewUser"
+              (change)="isNewUser = true">
+            <span>新規ユーザー登録</span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label for="email">メールアドレス *</label>
+          <input 
+            type="email" 
+            id="email"
+            [(ngModel)]="email" 
+            name="email"
+            placeholder="メールアドレスを入力"
+            required>
+        </div>
+
+        <div class="form-group" *ngIf="isNewUser">
+          <label for="displayName">表示名 *</label>
+          <input 
+            type="text" 
+            id="displayName"
+            [(ngModel)]="displayName" 
+            name="displayName"
+            placeholder="表示名を入力"
+            required>
+        </div>
+
+        <div class="form-group">
+          <label for="password">パスワード *</label>
+          <input 
+            type="password" 
+            id="password"
+            [(ngModel)]="password" 
+            name="password"
+            placeholder="パスワードを入力"
+            required>
+        </div>
+
+        <div *ngIf="errorMessage" class="error-message-inline">
+          {{ errorMessage }}
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="cancel-btn" (click)="goBack()">キャンセル</button>
+          <button type="submit" class="submit-btn" [disabled]="isLoading">
+            {{ isLoading ? '処理中...' : (isNewUser ? '登録して参加' : 'ログインして参加') }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+

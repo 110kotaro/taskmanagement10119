@@ -1,0 +1,439 @@
+.statistics-container {
+  min-height: 100vh;
+  background: var(--color-background);
+}
+
+.header {
+  background: var(--gradient-primary);
+  padding: var(--spacing-md) var(--spacing-xl);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  position: fixed;
+  top: 0;
+  left: 250px; /* デフォルト値 */
+  right: 0;
+  z-index: 100;
+  gap: var(--spacing-md);
+  transition: left 0.3s ease;
+}
+
+/* サイドバーが閉じている場合 */
+:host-context(.app-container.sidebar-closed) .header {
+  left: 0;
+}
+
+/* モバイルではサイドバーが閉じている前提で左から0 */
+@media (max-width: 768px) {
+  .header {
+    left: 0;
+  }
+}
+
+.header h1 {
+  margin: 0;
+    color:white;
+    font-size: 1.8rem;
+}
+
+.back-btn {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  background: white;
+  color: var(--color-primary);
+}
+
+.back-btn:hover {
+  background: var(--color-surface);
+  transform: translateY(-2px);
+}
+
+.main-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-xl);
+  padding-top: 5rem;
+}
+
+/* 時間範囲選択 */
+.time-range-selector {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: var(--color-surface);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.range-btn {
+  flex: 1;
+  padding: 12px 24px;
+  background: var(--color-border);
+  color: var(--color-text-secondary);
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.range-btn:hover {
+  background: var(--color-background);
+}
+
+.range-btn.active {
+  background: var(--color-primary);
+  color: white;
+}
+
+/* 判定パターン選択 */
+.filter-pattern-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.pattern-label {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+  margin-right: 5px;
+}
+
+.pattern-btn {
+  flex: 1;
+  padding: 10px 20px;
+  background: #e0e0e0;
+  color: #666;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.pattern-btn:hover {
+  background: #d0d0d0;
+}
+
+.pattern-btn.active {
+  background: #4CAF50;
+  color: white;
+}
+
+/* ローディング */
+.loading {
+  text-align: center;
+  padding: 40px;
+  font-size: 18px;
+  color: #666;
+}
+
+/* 統計セクション */
+.stats-section {
+  margin-bottom: 30px;
+  padding: 25px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.stats-section h2 {
+  margin: 0 0 20px 0;
+  font-size: 22px;
+  color: #333;
+  border-bottom: 2px solid #2196F3;
+  padding-bottom: 10px;
+}
+
+/* 統計グリッド */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.stat-card {
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  text-align: center;
+  border: 2px solid transparent;
+  transition: all 0.3s;
+}
+
+.stat-card:hover {
+  border-color: #2196F3;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.stat-card.delayed {
+  background: #fff3cd;
+  border-color: #ffc107;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: bold;
+  color: #333;
+}
+
+.stat-value.completed {
+  color: #4CAF50;
+}
+
+.stat-value .percentage {
+  display: block;
+  margin-bottom: 10px;
+}
+
+/* プログレスバー */
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4CAF50, #8BC34A);
+  transition: width 0.3s ease;
+  border-radius: 4px;
+}
+
+/* プロジェクト統計 */
+.project-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.project-stat-card {
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #2196F3;
+}
+
+.project-name {
+  margin: 0 0 15px 0;
+  font-size: 18px;
+  font-weight: bold;
+  color: #2196F3;
+}
+
+.project-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+}
+
+.project-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.project-stat-label {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+}
+
+.project-stat-value {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+}
+
+/* プロジェクトプログレスバー */
+.project-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #e0e0e0;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 5px;
+}
+
+.project-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2196F3, #64B5F6);
+  transition: width 0.3s ease;
+  border-radius: 3px;
+}
+
+/* 遅延タスク情報 */
+.delayed-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background: #fff3cd;
+  border-radius: 5px;
+  border-left: 4px solid #ffc107;
+  margin-bottom: 1rem;
+  gap: 1rem;
+}
+
+.delayed-info p {
+  margin: 0;
+  color: #856404;
+  font-size: 16px;
+  flex: 1;
+}
+
+.details-btn {
+  padding: 0.5rem 1rem;
+  background: #ffc107;
+  color: #856404;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: background 0.2s;
+  white-space: nowrap;
+  border: 1px solid #ffb300;
+}
+
+.details-btn:hover {
+  background: #ffb300;
+  color: #664d03;
+}
+
+.delayed-tasks-list {
+  margin-top: 1rem;
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.delayed-task-item {
+  padding: 1rem;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.delayed-task-item:hover {
+  background: #f5f5f5;
+}
+
+.delayed-task-item:last-child {
+  border-bottom: none;
+}
+
+.task-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  gap: 1rem;
+}
+
+.task-title {
+  font-weight: 600;
+  color: #333;
+  font-size: 1rem;
+  flex: 1;
+}
+
+.task-status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-not_started {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.status-in_progress {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+.status-completed {
+  background: #e8f5e9;
+  color: #388e3c;
+}
+
+.task-meta-row {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  font-size: 0.875rem;
+  color: #666;
+  flex-wrap: wrap;
+}
+
+.task-due-date {
+  color: #e74c3c;
+  font-weight: 500;
+}
+
+.task-project {
+  color: #667eea;
+  font-weight: 500;
+}
+
+/* グラフコンテナ */
+.chart-container {
+  position: relative;
+  height: 400px;
+  margin-top: 20px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+/* レスポンシブデザイン */
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .project-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .header {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .time-range-selector {
+    flex-direction: column;
+  }
+}
+

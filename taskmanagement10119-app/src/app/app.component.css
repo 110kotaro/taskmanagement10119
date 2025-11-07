@@ -1,0 +1,262 @@
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: var(--gradient-background);
+}
+
+.loading-spinner {
+  font-size: 1.5rem;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.app-container {
+  display: flex;
+  min-height: 100vh;
+  background: var(--color-background);
+}
+
+/* サイドバーの状態に応じてCSS変数を設定（グローバルスコープで） */
+.app-container {
+  --sidebar-width: 250px;
+  --header-left: 250px;
+}
+
+.app-container.sidebar-closed {
+  --header-left: 0;
+}
+
+/* サイドバー */
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  width: 250px;
+  background: var(--gradient-primary);
+  box-shadow: var(--shadow-md);
+  transition: transform 0.3s ease, width 0.3s ease;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.sidebar.closed {
+  transform: translateX(-250px);
+}
+
+.sidebar-header {
+  padding: var(--spacing-lg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.sidebar-header h2 {
+  color: white;
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+.sidebar-toggle {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.2s;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* サイドバーが閉じたときの左端固定トグルボタン */
+.sidebar-toggle-fixed {
+  position: fixed;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--gradient-primary);
+  border: none;
+  border-top-right-radius: var(--border-radius);
+  border-bottom-right-radius: var(--border-radius);
+  color: white;
+  padding: var(--spacing-md) var(--spacing-sm);
+  cursor: pointer;
+  font-size: 1.5rem;
+  font-weight: bold;
+  z-index: 1001;
+  box-shadow: var(--shadow-md);
+  transition: all 0.2s;
+}
+
+.sidebar-toggle-fixed:hover {
+  background: linear-gradient(180deg, var(--color-primary-dark) 0%, var(--color-secondary) 100%);
+  padding-left: 0.75rem;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: var(--spacing-md) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.nav-item {
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: transparent;
+  border: none;
+  color: white;
+  text-align: left;
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-left: 4px solid transparent;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-left-color: rgba(255, 255, 255, 0.5);
+}
+
+.nav-item.active {
+  background: rgba(255, 255, 255, 0.2);
+  border-left-color: white;
+  font-weight: 600;
+}
+
+.notifications-item {
+  position: relative;
+}
+
+.badge {
+  background: var(--color-error);
+  color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-sm);
+  font-weight: bold;
+}
+
+/* 個人/チーム切り替え */
+.view-mode-toggle {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.mode-btn {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.mode-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.mode-btn.active {
+  background: white;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.team-select {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: white;
+  color: var(--color-text);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+
+/* メインコンテンツエリア */
+.main-content-area {
+  flex: 1;
+  margin-left: 250px;
+  transition: margin-left 0.3s ease;
+  min-height: 100vh;
+}
+
+.main-content-area.sidebar-open {
+  margin-left: 250px;
+}
+
+.sidebar.closed ~ .main-content-area,
+.main-content-area:not(.sidebar-open) {
+  margin-left: 0;
+}
+
+/* モバイル対応 */
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-250px);
+    width: 250px;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .main-content-area {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .sidebar-toggle {
+    display: block;
+  }
+
+  /* サイドバーが開いている時に背景を暗く */
+  .sidebar.open::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 250px;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: -1;
+  }
+}
+
+/* デスクトップでサイドバーが閉じている場合の調整 */
+@media (min-width: 769px) {
+  .sidebar.closed ~ .main-content-area {
+    margin-left: 0;
+  }
+
+  .sidebar:not(.closed) ~ .main-content-area {
+    margin-left: 250px;
+  }
+}
+

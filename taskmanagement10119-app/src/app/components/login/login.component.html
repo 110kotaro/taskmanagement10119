@@ -1,0 +1,76 @@
+<div class="login-container">
+  <div class="login-card">
+    <h1>{{ showSignUp ? 'アカウント登録' : 'ログイン' }}</h1>
+
+    <!-- ログインフォーム -->
+    <form [formGroup]="loginForm" (ngSubmit)="onLogin()" *ngIf="!showSignUp">
+      <div class="form-group">
+        <label for="email">メールアドレス</label>
+        <input type="email" id="email" formControlName="email" placeholder="example@email.com">
+        <div class="error" *ngIf="loginForm.get('email')?.invalid && loginForm.get('email')?.touched">
+          有効なメールアドレスを入力してください
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="password">パスワード</label>
+        <input type="password" id="password" formControlName="password">
+        <div class="error" *ngIf="loginForm.get('password')?.invalid && loginForm.get('password')?.touched">
+          パスワードは6文字以上である必要があります
+        </div>
+      </div>
+
+      <div class="error" *ngIf="errorMessage">{{ errorMessage }}</div>
+
+      <button type="submit" [disabled]="loginForm.invalid">ログイン</button>
+      
+      <div class="toggle">
+        <p>アカウントをお持ちでない場合は <a (click)="toggleForms()">こちら</a> から登録</p>
+      </div>
+    </form>
+
+    <!-- 登録フォーム -->
+    <form [formGroup]="signUpForm" (ngSubmit)="onSignUp()" *ngIf="showSignUp">
+      <div class="form-group">
+        <label for="displayName">表示名</label>
+        <input type="text" id="displayName" formControlName="displayName" placeholder="山田太郎">
+        <div class="error" *ngIf="signUpForm.get('displayName')?.invalid && signUpForm.get('displayName')?.touched">
+          表示名を入力してください
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="signup-email">メールアドレス</label>
+        <input type="email" id="signup-email" formControlName="email" placeholder="example@email.com">
+        <div class="error" *ngIf="signUpForm.get('email')?.invalid && signUpForm.get('email')?.touched">
+          有効なメールアドレスを入力してください
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="signup-password">パスワード</label>
+        <input type="password" id="signup-password" formControlName="password">
+        <div class="error" *ngIf="signUpForm.get('password')?.invalid && signUpForm.get('password')?.touched">
+          パスワードは6文字以上である必要があります
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="confirmPassword">パスワード確認</label>
+        <input type="password" id="confirmPassword" formControlName="confirmPassword">
+        <div class="error" *ngIf="signUpForm.get('confirmPassword')?.invalid && signUpForm.get('confirmPassword')?.touched">
+          パスワードを再入力してください
+        </div>
+      </div>
+
+      <div class="error" *ngIf="errorMessage">{{ errorMessage }}</div>
+
+      <button type="submit" [disabled]="signUpForm.invalid">登録</button>
+      
+      <div class="toggle">
+        <p>すでにアカウントをお持ちの方は <a (click)="toggleForms()">こちら</a> からログイン</p>
+      </div>
+    </form>
+  </div>
+</div>
+

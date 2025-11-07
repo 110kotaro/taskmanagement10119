@@ -1,0 +1,247 @@
+<div class="archive-container">
+  <header class="header">
+    <button class="back-btn" (click)="goBack()">← 戻る</button>
+    <h1>📦 アーカイブ</h1>
+  </header>
+
+  <main class="main-content">
+    <!-- フィルターセクション -->
+    <div class="filters-section">
+      <div class="filters">
+        <div class="filter-group">
+          <label>種類:</label>
+          <select [(ngModel)]="itemTypeFilter" (change)="onFilterChange()">
+            <option value="all">すべて</option>
+            <option value="task">タスク</option>
+            <option value="project">プロジェクト</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label>ステータス:</label>
+          <select [(ngModel)]="archiveFilter" (change)="onFilterChange()">
+            <option value="all">すべて</option>
+            <option value="completed">完了済み</option>
+            <option value="deleted">削除済み</option>
+          </select>
+        </div>
+
+        <div class="filter-group" *ngIf="itemTypeFilter === 'all' || itemTypeFilter === 'task'">
+          <label>担当者:</label>
+          <select [(ngModel)]="selectedAssigneeId" (change)="onFilterChange()">
+            <option value="all">すべて</option>
+            <option *ngFor="let assignee of assignees" [value]="assignee.id">
+              {{ assignee.name }}
+            </option>
+          </select>
+        </div>
+
+        <div class="filter-group autocomplete-group">
+          <label>プロジェクト:</label>
+          <div class="autocomplete-wrapper">
+            <input 
+              type="text" 
+              placeholder="プロジェクト名を入力..."
+              [(ngModel)]="projectNameInput"
+              (ngModelChange)="onProjectNameChange($event)"
+              (focus)="onProjectNameInput()"
+              (blur)="hideProjectSuggestions()"
+              class="autocomplete-input">
+            <button *ngIf="projectNameInput" 
+                    class="clear-btn" 
+                    (click)="clearProjectFilter(); $event.stopPropagation()"
+                    type="button">×</button>
+            <div class="autocomplete-dropdown" *ngIf="showProjectSuggestions && filteredProjectSuggestions.length > 0">
+              <div *ngFor="let project of filteredProjectSuggestions" 
+                   class="autocomplete-item"
+                   (mousedown)="selectProject(project); $event.preventDefault()">
+                {{ project.name }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label>日付フィルター:</label>
+          <input type="checkbox" [(ngModel)]="dateFilterEnabled" (change)="onFilterChange()">
+          <span>有効</span>
+        </div>
+
+        <div *ngIf="dateFilterEnabled" class="filter-group">
+          <label>フィルター条件:</label>
+          <select [(ngModel)]="dateFilterType" (change)="onFilterChange()">
+            <option value="deleted">削除日時</option>
+            <option value="completed">完了日</option>
+          </select>
+        </div>
+
+        <div *ngIf="dateFilterEnabled" class="filter-group date-range-group">
+          <label>期間:</label>
+          <div class="date-range-inputs">
+            <input type="date" [(ngModel)]="dateFilterStart" (change)="onFilterChange()">
+            <span class="date-separator">～</span>
+            <input type="date" [(ngModel)]="dateFilterEnd" (change)="onFilterChange()">
+          </div>
+        </div>
+
+        <div class="filter-group sort-group">
+          <label>ソート順:</label>
+          <button class="sort-order-btn" (click)="toggleSortOrder()">
+            {{ sortOrder === 'asc' ? '↑' : '↓' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーカイブ一覧 -->
+    <div class="archive-list-container">
+      <!-- 一括操作ボタン -->
+      <div *ngIf="!isLoading && filteredItems.length > 0" class="bulk-actions">
+        <button class="select-all-btn" (click)="toggleAllItems()">
+          {{ selectedItems.size === filteredItems.length ? '全解除' : '全選択' }}
+        </button>
+        <button 
+          *ngIf="selectedItems.size > 0"
+          class="restore-selected-btn" 
+          (click)="restoreSelectedItems()">
+          選択した{{ selectedItems.size }}件を復元
+        </button>
+        <button 
+          *ngIf="selectedItems.size > 0 && currentUserRole === 'admin'"
+          class="delete-selected-btn" 
+          (click)="permanentlyDeleteSelectedItems()">
+          選択した{{ selectedItems.size }}件を完全削除
+        </button>
+      </div>
+
+      <div *ngIf="isLoading" class="loading">読み込み中...</div>
+      <div *ngIf="!isLoading && filteredItems.length === 0" class="no-items">
+        アーカイブ項目が見つかりません
+      </div>
+
+      <div *ngIf="!isLoading" class="archive-list">
+        <div *ngFor="let item of filteredItems" class="archive-item">
+          <div class="item-header">
+            <div class="item-info">
+              <input 
+                type="checkbox" 
+                [checked]="selectedItems.has(item.id)"
+                (change)="toggleItemSelection(item.id)"
+                (click)="$event.stopPropagation()">
+              <span class="item-type-badge" [ngClass]="'type-' + item.type">
+                {{ item.type === 'task' ? '📋 タスク' : '📁 プロジェクト' }}
+              </span>
+              <h3 class="item-title" (click)="viewItem(item)">{{ item.title }}</h3>
+              <p *ngIf="item.teamName" class="team-name">チーム: {{ item.teamName }}</p>
+            </div>
+            <div class="item-actions">
+              <button 
+                *ngIf="currentUserRole === 'admin' || (item.type === 'task' && item.creatorId === authService.currentUser?.uid) || (item.type === 'project' && item.ownerId === authService.currentUser?.uid)"
+                class="restore-btn" 
+                (click)="restoreItem(item)">
+                復元
+              </button>
+              <button 
+                *ngIf="currentUserRole === 'admin'"
+                class="delete-btn" 
+                (click)="permanentlyDeleteItem(item)">
+                完全削除
+              </button>
+            </div>
+          </div>
+          <div class="item-details">
+            <div class="detail-row" *ngIf="item.type === 'task' && item.status">
+              <span class="detail-label">ステータス:</span>
+              <span class="detail-value">{{ getStatusLabel(item.status) }}</span>
+            </div>
+            <div class="detail-row" *ngIf="item.assigneeName">
+              <span class="detail-label">担当者:</span>
+              <span class="detail-value">{{ item.assigneeName }}</span>
+            </div>
+            <div class="detail-row" *ngIf="item.projectName">
+              <span class="detail-label">プロジェクト:</span>
+              <span class="detail-value">{{ item.projectName }}</span>
+            </div>
+            <div class="detail-row" *ngIf="item.isDeleted && item.deletedAt">
+              <span class="detail-label">削除日時:</span>
+              <span class="detail-value">{{ formatDateTime(item.deletedAt) }}</span>
+            </div>
+            <div class="detail-row" *ngIf="item.completedAt && !item.isDeleted">
+              <span class="detail-label">完了日時:</span>
+              <span class="detail-value">{{ formatDateTime(item.completedAt) }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">作成日時:</span>
+              <span class="detail-value">{{ formatDateTime(item.createdAt) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- プロジェクト復元モーダル -->
+  <div *ngIf="showRestoreProjectModal && restoringProject" class="modal-overlay" (click)="closeRestoreProjectModal()">
+    <div class="modal-content restore-project-modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>プロジェクト復元</h2>
+        <button class="close-btn" (click)="closeRestoreProjectModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="warning-text">プロジェクト「{{ restoringProject.title }}」を復元しますか？</p>
+        
+        <div class="form-group">
+          <label>元々配下にあったタスクの扱い</label>
+          <div class="radio-group">
+            <label class="radio-option">
+              <input 
+                type="radio" 
+                name="taskRestoreMode" 
+                value="all"
+                [(ngModel)]="taskRestoreMode">
+              <span>すべて戻す（{{ originalProjectTasks.length }}件）</span>
+            </label>
+            <label class="radio-option">
+              <input 
+                type="radio" 
+                name="taskRestoreMode" 
+                value="partial"
+                [(ngModel)]="taskRestoreMode">
+              <span>一部戻す（戻すタスクを選択）</span>
+            </label>
+            <label class="radio-option">
+              <input 
+                type="radio" 
+                name="taskRestoreMode" 
+                value="none"
+                [(ngModel)]="taskRestoreMode">
+              <span>戻さない</span>
+            </label>
+          </div>
+        </div>
+        
+        <!-- 一部戻すの場合のタスク選択 -->
+        <div *ngIf="taskRestoreMode === 'partial' && originalProjectTasks.length > 0" class="task-selection">
+          <label>戻すタスクを選択（{{ selectedTaskIdsForRestore.size }}件選択中）</label>
+          <div class="task-checkbox-list">
+            <label *ngFor="let task of originalProjectTasks" class="task-checkbox-item">
+              <input 
+                type="checkbox"
+                [checked]="selectedTaskIdsForRestore.has(task.id)"
+                (change)="toggleTaskRestoreSelection(task.id)">
+              <span>{{ task.title }}</span>
+              <span *ngIf="task.isDeleted" class="task-deleted-badge">（削除済み）</span>
+            </label>
+          </div>
+        </div>
+        
+        <p class="info-text">削除されているタスクがある場合、それらも復元されます。</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" (click)="closeRestoreProjectModal()">キャンセル</button>
+        <button class="btn-primary" (click)="onRestoreProject()">復元</button>
+      </div>
+    </div>
+  </div>
+</div>
+

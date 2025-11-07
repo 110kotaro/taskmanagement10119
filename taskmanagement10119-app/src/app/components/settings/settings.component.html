@@ -1,0 +1,613 @@
+<div class="settings-container">
+  <header class="header">
+    <button class="back-btn" (click)="goBack()">← 戻る</button>
+    <h1>⚙️ 設定</h1>
+  </header>
+
+  <main class="main-content">
+    <div class="settings-section">
+      <h2>テーマ設定</h2>
+      <div class="theme-options">
+        <label class="theme-option">
+          <input 
+            type="radio" 
+            name="theme" 
+            value="light"
+            [checked]="currentTheme === 'light'"
+            (change)="onThemeChange('light')">
+          <span class="theme-option-label">
+            <span class="theme-icon">☀️</span>
+            <span>ライト</span>
+          </span>
+        </label>
+        <label class="theme-option">
+          <input 
+            type="radio" 
+            name="theme" 
+            value="dark"
+            [checked]="currentTheme === 'dark'"
+            (change)="onThemeChange('dark')">
+          <span class="theme-option-label">
+            <span class="theme-icon">🌙</span>
+            <span>ダーク</span>
+          </span>
+        </label>
+        <label class="theme-option">
+          <input 
+            type="radio" 
+            name="theme" 
+            value="auto"
+            [checked]="currentTheme === 'auto'"
+            (change)="onThemeChange('auto')">
+          <span class="theme-option-label">
+            <span class="theme-icon">🔄</span>
+            <span>システム設定に従う</span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h2>通知設定</h2>
+      <p class="settings-description">カテゴリごとに通知のオン/オフを設定できます。カテゴリを展開すると個別設定も可能です</p>
+      <div class="notification-options">
+        <!-- タスク関連 -->
+        <div class="notification-category">
+          <div class="notification-option category-header">
+            <label class="checkbox-label" (click)="$event.stopPropagation()">
+              <input 
+                type="checkbox" 
+                [checked]="notificationSettings['task']"
+                (change)="onNotificationSettingChange('task', $any($event.target).checked)">
+            </label>
+            <div class="category-content" (click)="toggleCategory('task')">
+              <span class="notification-icon">📋</span>
+              <div class="notification-option-content">
+                <span class="notification-option-title">タスク関連</span>
+                <span class="notification-option-description">タスク更新、割り当て、作成、削除、復元、完了</span>
+              </div>
+              <span class="expand-icon">{{ expandedCategories['task'] ? '▼' : '▶' }}</span>
+            </div>
+          </div>
+          <div class="notification-individual-settings" *ngIf="expandedCategories['task']">
+            <!-- お知らせに通知セクション -->
+            <div class="notification-settings-section">
+              <div class="notification-category-header">
+                <label class="checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['task']"
+                    (change)="onNotificationCategoryChange('task', $any($event.target).checked)">
+                </label>
+                <span class="notification-category-title">お知らせに通知（タスク関連）</span>
+              </div>
+              <div class="notification-individual-options">
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['taskCreated']"
+                    (change)="onIndividualSettingChange('taskCreated', $any($event.target).checked)">
+                  <span>タスク作成</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['taskUpdated']"
+                    (change)="onIndividualSettingChange('taskUpdated', $any($event.target).checked)">
+                  <span>タスク更新（ステータス変更、割り当て）</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['taskDeleted']"
+                    (change)="onIndividualSettingChange('taskDeleted', $any($event.target).checked)">
+                  <span>タスク削除</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['taskRestored']"
+                    (change)="onIndividualSettingChange('taskRestored', $any($event.target).checked)">
+                  <span>タスク復元</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['taskCompleted']"
+                    (change)="onIndividualSettingChange('taskCompleted', $any($event.target).checked)">
+                  <span>タスク完了</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- WebPush通知設定 -->
+            <div class="webpush-settings-section">
+              <div class="webpush-category-header">
+                <label class="checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['taskWebPush'] !== false"
+                    (change)="onWebPushCategoryChange('task', $any($event.target).checked)">
+                </label>
+                <span class="webpush-category-title">📱 WebPush通知（タスク関連）</span>
+              </div>
+              <div class="webpush-individual-settings">
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['taskCreatedWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('taskCreatedWebPush', $any($event.target).checked)">
+                  <span>タスク作成</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['taskUpdatedWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('taskUpdatedWebPush', $any($event.target).checked)">
+                  <span>タスク更新</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['taskDeletedWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('taskDeletedWebPush', $any($event.target).checked)">
+                  <span>タスク削除</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['taskRestoredWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('taskRestoredWebPush', $any($event.target).checked)">
+                  <span>タスク復元</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['taskCompletedWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('taskCompletedWebPush', $any($event.target).checked)">
+                  <span>タスク完了</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- プロジェクト関連 -->
+        <div class="notification-category">
+          <div class="notification-option category-header">
+            <label class="checkbox-label" (click)="$event.stopPropagation()">
+              <input 
+                type="checkbox" 
+                [checked]="notificationSettings['project']"
+                (change)="onNotificationSettingChange('project', $any($event.target).checked)">
+            </label>
+            <div class="category-content" (click)="toggleCategory('project')">
+              <span class="notification-icon">📁</span>
+              <div class="notification-option-content">
+                <span class="notification-option-title">プロジェクト関連</span>
+                <span class="notification-option-description">プロジェクト作成、更新、削除、復元、完了</span>
+              </div>
+              <span class="expand-icon">{{ expandedCategories['project'] ? '▼' : '▶' }}</span>
+            </div>
+          </div>
+          <div class="notification-individual-settings" *ngIf="expandedCategories['project']">
+            <!-- お知らせに通知セクション -->
+            <div class="notification-settings-section">
+              <div class="notification-category-header">
+                <label class="checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['project']"
+                    (change)="onNotificationCategoryChange('project', $any($event.target).checked)">
+                </label>
+                <span class="notification-category-title">お知らせに通知（プロジェクト関連）</span>
+              </div>
+              <div class="notification-individual-options">
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['projectCreated']"
+                    (change)="onIndividualSettingChange('projectCreated', $any($event.target).checked)">
+                  <span>プロジェクト作成</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['projectUpdated']"
+                    (change)="onIndividualSettingChange('projectUpdated', $any($event.target).checked)">
+                  <span>プロジェクト更新</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['projectDeleted']"
+                    (change)="onIndividualSettingChange('projectDeleted', $any($event.target).checked)">
+                  <span>プロジェクト削除</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['projectRestored']"
+                    (change)="onIndividualSettingChange('projectRestored', $any($event.target).checked)">
+                  <span>プロジェクト復元</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['projectCompleted']"
+                    (change)="onIndividualSettingChange('projectCompleted', $any($event.target).checked)">
+                  <span>プロジェクト完了</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- WebPush通知設定 -->
+            <div class="webpush-settings-section">
+              <div class="webpush-category-header">
+                <label class="checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['projectWebPush'] !== false"
+                    (change)="onWebPushCategoryChange('project', $any($event.target).checked)">
+                </label>
+                <span class="webpush-category-title">📱 WebPush通知（プロジェクト関連）</span>
+              </div>
+              <div class="webpush-individual-settings">
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['projectCreatedWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('projectCreatedWebPush', $any($event.target).checked)">
+                  <span>プロジェクト作成</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['projectUpdatedWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('projectUpdatedWebPush', $any($event.target).checked)">
+                  <span>プロジェクト更新</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['projectDeletedWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('projectDeletedWebPush', $any($event.target).checked)">
+                  <span>プロジェクト削除</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['projectRestoredWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('projectRestoredWebPush', $any($event.target).checked)">
+                  <span>プロジェクト復元</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['projectCompletedWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('projectCompletedWebPush', $any($event.target).checked)">
+                  <span>プロジェクト完了</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- リマインダー -->
+        <div class="notification-category">
+          <div class="notification-option category-header">
+            <label class="checkbox-label" (click)="$event.stopPropagation()">
+              <input 
+                type="checkbox" 
+                [checked]="notificationSettings['reminder']"
+                (change)="onNotificationSettingChange('reminder', $any($event.target).checked)">
+            </label>
+            <div class="category-content" (click)="toggleCategory('reminder')">
+              <span class="notification-icon">🔔</span>
+              <div class="notification-option-content">
+                <span class="notification-option-title">リマインダー</span>
+                <span class="notification-option-description">担当タスク、作成タスク、所属プロジェクト</span>
+              </div>
+              <span class="expand-icon">{{ expandedCategories['reminder'] ? '▼' : '▶' }}</span>
+            </div>
+          </div>
+          <div class="notification-individual-settings" *ngIf="expandedCategories['reminder']">
+            <!-- お知らせに通知セクション -->
+            <div class="notification-settings-section">
+              <div class="notification-category-header">
+                <label class="checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['reminder']"
+                    (change)="onNotificationCategoryChange('reminder', $any($event.target).checked)">
+                </label>
+                <span class="notification-category-title">お知らせに通知（リマインダー）</span>
+              </div>
+              <div class="notification-individual-options">
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['taskOverdue']"
+                    (change)="onIndividualSettingChange('taskOverdue', $any($event.target).checked)">
+                  <span>担当タスク（期限切れ）</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['taskReminder']"
+                    (change)="onIndividualSettingChange('taskReminder', $any($event.target).checked)">
+                  <span>リマインダー（作成タスク、所属プロジェクト）</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- WebPush通知設定 -->
+            <div class="webpush-settings-section">
+              <div class="webpush-category-header">
+                <label class="checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['reminderWebPush'] !== false"
+                    (change)="onWebPushCategoryChange('reminder', $any($event.target).checked)">
+                </label>
+                <span class="webpush-category-title">📱 WebPush通知（リマインダー）</span>
+              </div>
+              <div class="webpush-individual-settings">
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['taskOverdueWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('taskOverdueWebPush', $any($event.target).checked)">
+                  <span>担当タスク（期限切れ）</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['taskReminderWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('taskReminderWebPush', $any($event.target).checked)">
+                  <span>リマインダー（作成タスク、所属プロジェクト）</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 日付チェック -->
+        <div class="notification-category">
+          <div class="notification-option category-header">
+            <label class="checkbox-label" (click)="$event.stopPropagation()">
+              <input 
+                type="checkbox" 
+                [checked]="notificationSettings['dateCheck']"
+                (change)="onNotificationSettingChange('dateCheck', $any($event.target).checked)">
+            </label>
+            <div class="category-content" (click)="toggleCategory('dateCheck')">
+              <span class="notification-icon">📅</span>
+              <div class="notification-option-content">
+                <span class="notification-option-title">日付チェック</span>
+                <span class="notification-option-description">開始日・終了日を過ぎた時の通知</span>
+              </div>
+              <span class="expand-icon">{{ expandedCategories['dateCheck'] ? '▼' : '▶' }}</span>
+            </div>
+          </div>
+          <div class="notification-individual-settings" *ngIf="expandedCategories['dateCheck']">
+            <!-- お知らせに通知セクション -->
+            <div class="notification-settings-section">
+              <div class="notification-category-header">
+                <label class="checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['dateCheck']"
+                    (change)="onNotificationCategoryChange('dateCheck', $any($event.target).checked)">
+                </label>
+                <span class="notification-category-title">お知らせに通知（日付チェック）</span>
+              </div>
+              <div class="notification-individual-options">
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['startDateOverdue']"
+                    (change)="onIndividualSettingChange('startDateOverdue', $any($event.target).checked)">
+                  <span>開始日を過ぎた時</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['endDateOverdue']"
+                    (change)="onIndividualSettingChange('endDateOverdue', $any($event.target).checked)">
+                  <span>終了日を過ぎた時</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- WebPush通知設定 -->
+            <div class="webpush-settings-section">
+              <div class="webpush-category-header">
+                <label class="checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['dateCheckWebPush'] !== false"
+                    (change)="onWebPushCategoryChange('dateCheck', $any($event.target).checked)">
+                </label>
+                <span class="webpush-category-title">📱 WebPush通知（日付チェック）</span>
+              </div>
+              <div class="webpush-individual-settings">
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['startDateOverdueWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('startDateOverdueWebPush', $any($event.target).checked)">
+                  <span>開始日を過ぎた時</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['endDateOverdueWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('endDateOverdueWebPush', $any($event.target).checked)">
+                  <span>終了日を過ぎた時</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- チーム -->
+        <div class="notification-category">
+          <div class="notification-option category-header">
+            <label class="checkbox-label" (click)="$event.stopPropagation()">
+              <input 
+                type="checkbox" 
+                [checked]="notificationSettings['team']"
+                (change)="onNotificationSettingChange('team', $any($event.target).checked)">
+            </label>
+            <div class="category-content" (click)="toggleCategory('team')">
+              <span class="notification-icon">👥</span>
+              <div class="notification-option-content">
+                <span class="notification-option-title">チーム</span>
+                <span class="notification-option-description">チーム招待、退会、権限変更、管理者からのお知らせ</span>
+              </div>
+              <span class="expand-icon">{{ expandedCategories['team'] ? '▼' : '▶' }}</span>
+            </div>
+          </div>
+          <div class="notification-individual-settings" *ngIf="expandedCategories['team']">
+            <!-- お知らせに通知セクション -->
+            <div class="notification-settings-section">
+              <div class="notification-category-header">
+                <label class="checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['team']"
+                    (change)="onNotificationCategoryChange('team', $any($event.target).checked)">
+                </label>
+                <span class="notification-category-title">お知らせに通知（チーム）</span>
+              </div>
+              <div class="notification-individual-options">
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['teamInvitation']"
+                    (change)="onIndividualSettingChange('teamInvitation', $any($event.target).checked)">
+                  <span>チーム招待</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['teamInvitationAccepted']"
+                    (change)="onIndividualSettingChange('teamInvitationAccepted', $any($event.target).checked)">
+                  <span>チーム招待承認</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['teamInvitationRejected']"
+                    (change)="onIndividualSettingChange('teamInvitationRejected', $any($event.target).checked)">
+                  <span>チーム招待拒否</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['teamLeave']"
+                    (change)="onIndividualSettingChange('teamLeave', $any($event.target).checked)">
+                  <span>チーム退会</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['teamPermissionChange']"
+                    (change)="onIndividualSettingChange('teamPermissionChange', $any($event.target).checked)">
+                  <span>権限変更</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['teamAdminAnnouncement']"
+                    (change)="onIndividualSettingChange('teamAdminAnnouncement', $any($event.target).checked)">
+                  <span>管理者からのお知らせ</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- WebPush通知設定 -->
+            <div class="webpush-settings-section">
+              <div class="webpush-category-header">
+                <label class="checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['teamWebPush'] !== false"
+                    (change)="onWebPushCategoryChange('team', $any($event.target).checked)">
+                </label>
+                <span class="webpush-category-title">📱 WebPush通知（チーム）</span>
+              </div>
+              <div class="webpush-individual-settings">
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['teamInvitationWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('teamInvitationWebPush', $any($event.target).checked)">
+                  <span>チーム招待</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['teamInvitationAcceptedWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('teamInvitationAcceptedWebPush', $any($event.target).checked)">
+                  <span>チーム招待承認</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['teamInvitationRejectedWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('teamInvitationRejectedWebPush', $any($event.target).checked)">
+                  <span>チーム招待拒否</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['teamLeaveWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('teamLeaveWebPush', $any($event.target).checked)">
+                  <span>チーム退会</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['teamPermissionChangeWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('teamPermissionChangeWebPush', $any($event.target).checked)">
+                  <span>権限変更</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['teamAdminAnnouncementWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('teamAdminAnnouncementWebPush', $any($event.target).checked)">
+                  <span>管理者からのお知らせ</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h2>その他の設定</h2>
+      <div class="other-settings">
+        <label class="setting-option">
+          <input 
+            type="checkbox" 
+            [checked]="showNextTasks"
+            (change)="onShowNextTasksChange($any($event.target).checked)">
+          <span>次やるタスクを表示する</span>
+        </label>
+      </div>
+    </div>
+  </main>
+
+  <!-- 保存中モーダル -->
+  <div class="loading-modal-overlay" *ngIf="isLoading">
+    <div class="loading-modal-content">
+      <div class="loading-spinner"></div>
+      <p>保存中...</p>
+    </div>
+  </div>
+</div>
+

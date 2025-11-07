@@ -1,0 +1,912 @@
+.task-detail-container {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 0 2rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: #999;
+}
+
+.task-detail-card {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.back-btn {
+  padding: 0.5rem 1rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.back-btn:hover {
+  background: #5568d3;
+}
+
+.edit-btn, .duplicate-btn, .delete-btn {
+  padding: 0.5rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.edit-btn {
+  background: #667eea;
+  color: white;
+}
+
+.edit-btn:hover {
+  background: #5568d3;
+}
+
+.duplicate-btn {
+  background: #28a745;
+  color: white;
+}
+
+.duplicate-btn:hover {
+  background: #218838;
+}
+
+.delete-btn {
+  background: #e74c3c;
+  color: white;
+}
+
+.delete-btn:hover {
+  background: #c0392b;
+}
+
+h1 {
+  margin: 0 0 1.5rem 0;
+  color: #333;
+}
+
+.task-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.info-item {
+  display: flex;
+  gap: 1rem;
+  align-items: start;
+}
+
+.label {
+  font-weight: 600;
+  color: #666;
+  min-width: 100px;
+}
+
+.status-badge, .priority-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.status-not_started {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.status-in_progress {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+.status-completed {
+  background: #e8f5e9;
+  color: #388e3c;
+}
+
+.priority-important {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.priority-normal {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.priority-low {
+  background: #e0f2f1;
+  color: #00695c;
+}
+
+.priority-none {
+  background: #f5f5f5;
+  color: #616161;
+}
+
+/* フォームスタイル */
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #555;
+  font-weight: 500;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+}
+
+.cancel-btn, .save-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.cancel-btn {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.cancel-btn:hover {
+  background: #d0d0d0;
+}
+
+.save-btn {
+  background: #667eea;
+  color: white;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: #5568d3;
+}
+
+.save-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.timer-section {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 2px solid #e0e0e0;
+}
+
+.timer-btn {
+  width: 100%;
+  padding: 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.timer-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+/* サブタスクセクション */
+.subtasks-section {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.subtasks-section h3 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.progress-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  background: white;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.progress-percentage {
+  color: #667eea;
+}
+
+.progress-manual-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.progress-input {
+  width: 60px;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.progress-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.percent-symbol {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.manual-progress-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #ff9800;
+}
+
+.manual-label {
+  font-weight: 500;
+}
+
+.resume-auto-btn {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.resume-auto-btn:hover {
+  background-color: #45a049;
+}
+
+/* 手動計算ボタン */
+.manual-calc-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  background-color: #667eea;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.manual-calc-btn:hover {
+  background-color: #5568d3;
+}
+
+/* 決定ボタン */
+.confirm-btn {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.9rem;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.confirm-btn:hover {
+  background-color: #45a049;
+}
+
+/* キャンセルボタン（手動入力用） */
+.cancel-manual-btn {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.9rem;
+  background-color: #999;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.cancel-manual-btn:hover {
+  background-color: #777;
+}
+
+.subtask-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem 0;
+}
+
+.subtask-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background: white;
+  border-radius: 6px;
+  gap: 1rem;
+  transition: background 0.2s;
+}
+
+.subtask-item:hover {
+  background: #f5f5f5;
+}
+
+.subtask-item.completed {
+  opacity: 0.6;
+}
+
+.subtask-item input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.subtask-title {
+  flex: 1;
+  color: #333;
+}
+
+.subtask-item.completed .subtask-title {
+  text-decoration: line-through;
+}
+
+.delete-subtask-btn {
+  padding: 0.25rem 0.75rem;
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.delete-subtask-btn:hover {
+  background: #d32f2f;
+}
+
+.add-subtask {
+  display: flex;
+  gap: 1rem;
+}
+
+.add-subtask input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.add-subtask input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.add-subtask button {
+  padding: 0.75rem 1.5rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.add-subtask button:hover {
+  background: #5568d3;
+}
+
+/* コメントセクション */
+.comments-section {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 2px solid #e0e0e0;
+}
+
+.comments-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.comments-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.toggle-comments-btn {
+  padding: 0.5rem 1rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.toggle-comments-btn:hover {
+  background: #5568d3;
+}
+
+.comments-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.add-comment {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.add-comment textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.add-comment textarea:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.add-comment button {
+  align-self: flex-end;
+  padding: 0.5rem 1.5rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.add-comment button:hover {
+  background: #5568d3;
+}
+
+.comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.comment-item {
+  padding: 1rem;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+.comment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.comment-author {
+  font-weight: 600;
+  color: #333;
+}
+
+.comment-date {
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.comment-content {
+  color: #555;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.no-comments {
+  padding: 2rem;
+  text-align: center;
+  color: #999;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+/* ファイルセクション */
+.files-section {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 2px solid #e0e0e0;
+}
+
+.files-section h3 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.file-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #f9f9f9;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.file-input-label {
+  padding: 0.5rem 1rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-block;
+  text-align: center;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.file-input-label:hover {
+  background: #5568d3;
+}
+
+.upload-btn {
+  padding: 0.5rem 1.5rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  align-self: flex-start;
+}
+
+.upload-btn:hover:not(:disabled) {
+  background: #5568d3;
+}
+
+.upload-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.selected-files {
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+}
+
+.file-name {
+  flex: 1;
+  color: #333;
+  font-weight: 500;
+}
+
+.file-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.download-btn, .delete-file-btn {
+  padding: 0.25rem 0.75rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.download-btn {
+  background: #667eea;
+  color: white;
+}
+
+.download-btn:hover {
+  background: #5568d3;
+}
+
+.delete-file-btn {
+  background: #f44336;
+  color: white;
+}
+
+.delete-file-btn:hover {
+  background: #d32f2f;
+}
+
+.no-files {
+  padding: 2rem;
+  text-align: center;
+  color: #999;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+/* 作業時間詳細セクション */
+.details-btn {
+  margin-left: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.9rem;
+  background-color: #667eea;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.details-btn:hover {
+  background-color: #5568d3;
+}
+
+.work-time-details {
+  margin-top: 1rem;
+  padding: 1.5rem;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.work-time-details h4 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.work-sessions-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.work-sessions-table th,
+.work-sessions-table td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.work-sessions-table th {
+  background-color: #667eea;
+  color: white;
+  font-weight: 600;
+}
+
+.work-sessions-table tr.editing {
+  background-color: #fff3e0;
+}
+
+.work-sessions-table tr.total-row {
+  background-color: #e8e8e8;
+  font-weight: bold;
+}
+
+.work-sessions-table tr.total-row td {
+  border-bottom: none;
+}
+
+.edit-session-btn,
+.view-log-btn {
+  padding: 0.25rem 0.5rem;
+  margin-right: 0.25rem;
+  font-size: 0.85rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.edit-session-btn {
+  background-color: #4caf50;
+  color: white;
+}
+
+.edit-session-btn:hover {
+  background-color: #45a049;
+}
+
+.view-log-btn {
+  background-color: #2196f3;
+  color: white;
+}
+
+.view-log-btn:hover {
+  background-color: #1976d2;
+}
+
+.work-sessions-table input[type="datetime-local"],
+.work-sessions-table input[type="number"] {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  width: 100%;
+}
+
+.work-sessions-table input[type="datetime-local"]:focus,
+.work-sessions-table input[type="number"]:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+/* 変更ログモーダル */
+.change-log-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  max-width: 800px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.modal-content h4 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.change-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.change-log-table th,
+.change-log-table td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.change-log-table th {
+  background-color: #667eea;
+  color: white;
+  font-weight: 600;
+}
+
+.change-log-table tr.no-logs {
+  text-align: center;
+  color: #999;
+  padding: 2rem;
+}
+
+.close-modal-btn {
+  padding: 0.5rem 1.5rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+.close-modal-btn:hover {
+  background: #5568d3;
+}
+
+.add-session-row {
+  background-color: #f5f5f5;
+}
+
+.add-session-btn {
+  padding: 0.5rem 1rem;
+  background-color: #667eea;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.add-session-btn:hover {
+  background-color: #5568d3;
+}
+
+.work-sessions-table tr.adding {
+  background-color: #e8f5e9;
+}
+
+.no-sessions {
+  padding: 2rem;
+  text-align: center;
+  color: #666;
+}
+
+.add-session-form {
+  margin-top: 1rem;
+}
+
