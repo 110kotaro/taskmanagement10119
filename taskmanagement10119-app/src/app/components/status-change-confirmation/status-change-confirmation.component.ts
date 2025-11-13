@@ -30,9 +30,17 @@ export class StatusChangeConfirmationComponent {
       await this.taskService.updateTask(this.task.id, {
         status: TaskStatus.InProgress
       });
-      // dateCheckedAtを更新（開始日チェックの通知を止める）
-      // ステータス変更時にdateCheckedAtがリセットされるので、終了日チェックも正しく動作する
-      await this.taskService.markTaskDateChecked(this.task.id);
+      // 開始日チェックの場合のみdateCheckedAtを更新
+      // 終了日チェックが必要な場合は、終了日チェック完了時に更新される
+      if (this.checkType === 'startDate') {
+        // 終了日チェックも必要か確認
+        const checkResult = this.taskService.checkTaskDates(this.task);
+        if (!checkResult.needsEndDateCheck) {
+          // 終了日チェックが不要な場合のみ更新
+          await this.taskService.markTaskDateChecked(this.task.id);
+        }
+        // 終了日チェックが必要な場合は更新しない（終了日チェック完了時に更新される）
+      }
       this.actionSelected.emit(action);
       this.closed.emit();
     } else if (action === 'change_to_completed') {
@@ -48,7 +56,12 @@ export class StatusChangeConfirmationComponent {
         status: TaskStatus.Completed,
         completedAt: Timestamp.now()
       });
-      await this.taskService.markTaskDateChecked(this.task.id);
+      // 開始日チェックの場合はdateCheckedAt、終了日チェックの場合はendDateCheckedAtを更新
+      if (this.checkType === 'startDate') {
+        await this.taskService.markTaskDateChecked(this.task.id);
+      } else {
+        await this.taskService.markTaskEndDateChecked(this.task.id);
+      }
       this.actionSelected.emit(action);
       this.closed.emit();
     } else if (action === 'change_end_date') {
@@ -56,7 +69,12 @@ export class StatusChangeConfirmationComponent {
       this.actionSelected.emit(action);
     } else if (action === 'ignore') {
       // 無視（チェック済みフラグのみ更新）
-      await this.taskService.markTaskDateChecked(this.task.id);
+      // 開始日チェックの場合はdateCheckedAt、終了日チェックの場合はendDateCheckedAtを更新
+      if (this.checkType === 'startDate') {
+        await this.taskService.markTaskDateChecked(this.task.id);
+      } else {
+        await this.taskService.markTaskEndDateChecked(this.task.id);
+      }
       this.actionSelected.emit(action);
       this.closed.emit();
     }

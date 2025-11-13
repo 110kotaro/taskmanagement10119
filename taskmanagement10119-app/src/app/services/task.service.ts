@@ -1452,49 +1452,66 @@ export class TaskService {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
-    // 今日既にチェック済みか確認（日付のみで判断）
-    if (task.dateCheckedAt) {
-      const checkedDate = task.dateCheckedAt.toDate();
-      const checkedDateOnly = new Date(checkedDate.getFullYear(), checkedDate.getMonth(), checkedDate.getDate());
-      if (checkedDateOnly.getTime() === today.getTime()) {
-        // 今日既にチェック済み
-        return { needsStartDateCheck: false, needsEndDateCheck: false };
-      }
-    }
-    
     // 時間設定を基準に判断（時間が設定されている場合はその時間を考慮）
     const startDate = task.startDate.toDate();
     const endDate = task.endDate.toDate();
     
     // 開始日時のチェック（未着手で開始日時を過ぎている）
-    // 時間が00:00:00の場合は日付のみで判断、それ以外は時間も考慮
-    const startTime = startDate.getHours() * 3600 + startDate.getMinutes() * 60 + startDate.getSeconds();
-    const needsStartDateCheck = task.status === TaskStatus.NotStarted && 
-                                (startTime === 0 ? 
-                                  startDate.getTime() < today.getTime() : 
-                                  startDate.getTime() < now.getTime());
+    // dateCheckedAtは開始日チェック専用として扱う
+    let needsStartDateCheck = false;
+    if (task.status === TaskStatus.NotStarted) {
+      // 今日既に開始日チェック済みか確認（日付のみで判断）
+      let isStartDateChecked = false;
+      if (task.dateCheckedAt) {
+        const checkedDate = task.dateCheckedAt.toDate();
+        const checkedDateOnly = new Date(checkedDate.getFullYear(), checkedDate.getMonth(), checkedDate.getDate());
+        if (checkedDateOnly.getTime() === today.getTime()) {
+          isStartDateChecked = true;
+        }
+      }
+      
+      if (!isStartDateChecked) {
+        // 時間が00:00:00の場合は日付のみで判断、それ以外は時間も考慮
+        const startTime = startDate.getHours() * 3600 + startDate.getMinutes() * 60 + startDate.getSeconds();
+        const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+        needsStartDateCheck = (startTime === 0 ? 
+                                startDateOnly.getTime() <= today.getTime() : 
+                                startDate.getTime() < now.getTime());
+      }
+    }
     
     // 終了日時のチェック（未着手または進行中で終了日時を過ぎている）
-    // 時間が23:59:59の場合は日付のみで判断、それ以外は時間も考慮
-    const endTime = endDate.getHours() * 3600 + endDate.getMinutes() * 60 + endDate.getSeconds();
-    const endTimeMax = 23 * 3600 + 59 * 60 + 59; // 23:59:59
+    // endDateCheckedAtは終了日チェック専用として扱う
     let needsEndDateCheck = false;
-    if (endTime === endTimeMax) {
-      // 終了日の翌日の00:00:00と比較
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      needsEndDateCheck = (task.status === TaskStatus.NotStarted || task.status === TaskStatus.InProgress) &&
-                          endDate.getTime() < tomorrow.getTime();
-    } else {
-      // 時刻も含めて比較
-      needsEndDateCheck = (task.status === TaskStatus.NotStarted || task.status === TaskStatus.InProgress) &&
-                          endDate.getTime() < now.getTime();
+    if (task.status === TaskStatus.NotStarted || task.status === TaskStatus.InProgress) {
+      // 今日既に終了日チェック済みか確認（日付のみで判断）
+      let isEndDateChecked = false;
+      if (task.endDateCheckedAt) {
+        const checkedDate = task.endDateCheckedAt.toDate();
+        const checkedDateOnly = new Date(checkedDate.getFullYear(), checkedDate.getMonth(), checkedDate.getDate());
+        if (checkedDateOnly.getTime() === today.getTime()) {
+          isEndDateChecked = true;
+        }
+      }
+      
+      if (!isEndDateChecked) {
+        const endTime = endDate.getHours() * 3600 + endDate.getMinutes() * 60 + endDate.getSeconds();
+        const endTimeMax = 23 * 3600 + 59 * 60 + 59; // 23:59:59
+        if (endTime === endTimeMax) {
+          // 時間が23:59:59の場合は日付のみで判断（今日が終了日なら明日チェック）
+          const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+          needsEndDateCheck = endDateOnly.getTime() < today.getTime();
+        } else {
+          // 時刻も含めて比較
+          needsEndDateCheck = endDate.getTime() < now.getTime();
+        }
+      }
     }
     
     return { needsStartDateCheck, needsEndDateCheck };
   }
 
-  // 日付チェック済みフラグを更新
+  // 開始日チェック済みフラグを更新
   async markTaskDateChecked(taskId: string): Promise<void> {
     try {
       const taskRef = doc(db, 'tasks', taskId);
@@ -1503,6 +1520,18 @@ export class TaskService {
       });
     } catch (error: any) {
       console.error('Error marking task date checked:', error);
+    }
+  }
+
+  // 終了日チェック済みフラグを更新
+  async markTaskEndDateChecked(taskId: string): Promise<void> {
+    try {
+      const taskRef = doc(db, 'tasks', taskId);
+      await updateDoc(taskRef, {
+        endDateCheckedAt: Timestamp.now()
+      });
+    } catch (error: any) {
+      console.error('Error marking task end date checked:', error);
     }
   }
 

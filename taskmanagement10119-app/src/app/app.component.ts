@@ -561,8 +561,8 @@ export class AppComponent implements OnInit, OnDestroy {
           }
           // 終了日チェックが必要な場合は更新しない（終了日チェックでも通知を作成するため）
         } else {
-          // 終了日チェックの場合は更新
-          await this.taskService.markTaskDateChecked(task.id);
+          // 終了日チェックの場合は更新（終了日チェック完了時のみendDateCheckedAtを更新）
+          await this.taskService.markTaskEndDateChecked(task.id);
         }
       } else {
         console.warn(`[日付チェック] ${checkType === 'startDate' ? '開始日超過' : '期限切れ'}通知の作成がスキップされました（通知設定で無効化されている可能性があります）(タスク: ${task.title})`);
@@ -636,29 +636,30 @@ export class AppComponent implements OnInit, OnDestroy {
         // 開始日チェック: 未着手で開始日時を過ぎている
         const startDate = task.startDate.toDate();
         const startTime = startDate.getHours() * 3600 + startDate.getMinutes() * 60 + startDate.getSeconds();
+        const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
         const needsStartDateCheck = task.status === TaskStatus.NotStarted && 
                                     (startTime === 0 ? 
-                                      startDate.getTime() < today.getTime() : 
+                                      startDateOnly.getTime() <= today.getTime() : 
                                       startDate.getTime() < now.getTime());
         if (needsStartDateCheck) {
           shouldShowModal = true;
         }
       } else if (checkType === 'endDate' && task.endDate) {
         // 終了日チェック: 未着手または進行中で終了日時を過ぎている
+        // dateCheckedAtに依存せず、終了日時と現在時刻のみで判定
         const endDate = task.endDate.toDate();
         const endTime = endDate.getHours() * 3600 + endDate.getMinutes() * 60 + endDate.getSeconds();
         const endTimeMax = 23 * 3600 + 59 * 60 + 59; // 23:59:59
         let needsEndDateCheck = false;
-        if (endTime === endTimeMax) {
-          // 終了日の翌日の00:00:00と比較
-          const tomorrow = new Date(today);
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          needsEndDateCheck = (task.status === TaskStatus.NotStarted || task.status === TaskStatus.InProgress) &&
-                              endDate.getTime() < tomorrow.getTime();
-        } else {
-          // 時刻も含めて比較
-          needsEndDateCheck = (task.status === TaskStatus.NotStarted || task.status === TaskStatus.InProgress) &&
-                              endDate.getTime() < now.getTime();
+        if (task.status === TaskStatus.NotStarted || task.status === TaskStatus.InProgress) {
+          if (endTime === endTimeMax) {
+            // 時間が23:59:59の場合は日付のみで判断（今日が終了日なら明日チェック）
+            const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+            needsEndDateCheck = endDateOnly.getTime() < today.getTime();
+          } else {
+            // 時刻も含めて比較
+            needsEndDateCheck = endDate.getTime() < now.getTime();
+          }
         }
         if (needsEndDateCheck) {
           shouldShowModal = true;
@@ -933,7 +934,7 @@ export class AppComponent implements OnInit, OnDestroy {
         if (currentTask) {
           // 終了日チェックの場合、または開始日チェックで完了/無視した場合は更新
           if (checkType === 'endDate') {
-            await this.taskService.markTaskDateChecked(task.id);
+            await this.taskService.markTaskEndDateChecked(task.id);
           } else if (checkType === 'startDate') {
             // 開始日チェックの場合、現在のステータスを確認
             if (currentTask.status === TaskStatus.NotStarted) {

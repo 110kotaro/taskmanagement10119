@@ -64,8 +64,8 @@ export class EndDateChangeComponent {
         endDate: newEndDate
       });
       
-      // チェック済みフラグを更新
-      await this.taskService.markTaskDateChecked(this.task.id);
+      // 終了日チェック済みフラグを更新
+      await this.taskService.markTaskEndDateChecked(this.task.id);
 
       // タスク更新を通知
       this.updated.emit(this.task.id);

@@ -126,7 +126,8 @@ export interface Task {
   isDeleted: boolean;
   deletedAt?: Timestamp;
   statusBeforeDeletion?: TaskStatus; // 削除前のステータス（復元時に使用）
-  dateCheckedAt?: Timestamp; // 日付チェック済み日時（同じ日は再チェックしない）
+  dateCheckedAt?: Timestamp; // 開始日チェック済み日時（同じ日は再チェックしない）
+  endDateCheckedAt?: Timestamp; // 終了日チェック済み日時（同じ日は再チェックしない）
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
