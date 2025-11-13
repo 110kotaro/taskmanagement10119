@@ -486,6 +486,7 @@ export class TaskService {
     isDeleted?: boolean;
     userId?: string; // 個人モード時のユーザーID
     userTeamIds?: string[]; // 個人モード時の所属チームIDリスト
+    creatorId?: string; // 作成者ID
   }): Promise<Task[]> {
     try {
       const constraints: QueryConstraint[] = [];
@@ -496,6 +497,10 @@ export class TaskService {
       
       if (filters.assigneeId) {
         constraints.push(where('assigneeId', '==', filters.assigneeId));
+      }
+      
+      if (filters.creatorId) {
+        constraints.push(where('creatorId', '==', filters.creatorId));
       }
       
       if (filters.projectId) {
@@ -523,16 +528,58 @@ export class TaskService {
       if (filters.teamId !== undefined) {
         if (filters.teamId === null) {
           // 個人モード: 自分が作成したタスク または 所属チームのタスクで自分が担当者
-          // または チームプロジェクトタスクで、そのプロジェクト内に自分が担当しているタスクがある場合
+          // または チームプロジェクトタスクで、プロジェクト閲覧可能かつ自分が担当/作成するタスク
           if (filters.userId && filters.userTeamIds && filters.userTeamIds.length > 0) {
             const userTeamIds = filters.userTeamIds; // 型チェック用に変数に保存
             
-            // 担当タスクがあるプロジェクトIDのセットを作成
-            const projectIdsWithAssignedTasks = new Set<string>();
-            const assignedTasks = tasks.filter(task => task.assigneeId === filters.userId && task.projectId);
-            for (const task of assignedTasks) {
+            // プロジェクト閲覧可能なプロジェクトIDのセットを作成
+            // 1. プロジェクトの担当者が自分（担当者がいない場合は作成者）
+            // 2. プロジェクト内に自分が担当するタスクがある
+            // 3. プロジェクト内に自分が作成したタスクで担当者がいないものがある
+            const viewableProjectIds = new Set<string>();
+            
+            // プロジェクトタスクを抽出
+            const projectTasks = tasks.filter(task => task.projectId);
+            const uniqueProjectIds = new Set<string>();
+            for (const task of projectTasks) {
               if (task.projectId) {
-                projectIdsWithAssignedTasks.add(task.projectId);
+                uniqueProjectIds.add(task.projectId);
+              }
+            }
+            
+            // 各プロジェクトの閲覧権限をチェック
+            for (const projectId of uniqueProjectIds) {
+              try {
+                const project = await this.projectService.getProject(projectId);
+                if (!project) continue;
+                
+                // プロジェクトの担当者が自分（担当者がいない場合は作成者）
+                const projectAssigneeId = project.assigneeId || project.ownerId;
+                if (projectAssigneeId === filters.userId) {
+                  viewableProjectIds.add(projectId);
+                  continue;
+                }
+                
+                // プロジェクト内に自分が担当するタスクがある
+                const assignedTasks = projectTasks.filter(
+                  task => task.projectId === projectId && task.assigneeId === filters.userId
+                );
+                if (assignedTasks.length > 0) {
+                  viewableProjectIds.add(projectId);
+                  continue;
+                }
+                
+                // プロジェクト内に自分が作成したタスクで担当者がいないものがある
+                const createdTasksWithoutAssignee = projectTasks.filter(
+                  task => task.projectId === projectId && 
+                          !task.assigneeId && 
+                          task.creatorId === filters.userId
+                );
+                if (createdTasksWithoutAssignee.length > 0) {
+                  viewableProjectIds.add(projectId);
+                }
+              } catch (error) {
+                console.error(`Error checking project ${projectId}:`, error);
               }
             }
             
@@ -541,19 +588,94 @@ export class TaskService {
               if (!task.teamId && task.creatorId === filters.userId) {
                 return true;
               }
-              // チームタスクで自分が担当者かつ所属チームに含まれる
-              if (task.teamId && task.assigneeId === filters.userId && userTeamIds.includes(task.teamId)) {
-                return true;
+              // チームタスクで自分が担当者（担当者がいない場合は作成者）かつ所属チームに含まれる
+              if (task.teamId && userTeamIds.includes(task.teamId)) {
+                if (task.assigneeId === filters.userId) {
+                  return true;
+                }
+                if (!task.assigneeId && task.creatorId === filters.userId) {
+                  return true;
+                }
               }
-              // チームプロジェクトタスクで、そのプロジェクト内に自分が担当しているタスクがある場合
-              if (task.projectId && projectIdsWithAssignedTasks.has(task.projectId)) {
-                return true;
+              // チームプロジェクトタスクで、プロジェクト閲覧可能かつ自分が担当/作成するタスク
+              if (task.projectId && viewableProjectIds.has(task.projectId)) {
+                // 自分が担当者（担当者がいない場合は作成者）のタスクのみを表示
+                if (task.assigneeId === filters.userId) {
+                  return true;
+                }
+                if (!task.assigneeId && task.creatorId === filters.userId) {
+                  return true;
+                }
               }
               return false;
             });
           } else if (filters.userId) {
             // フォールバック: 自分が作成したタスクのみ（チーム未参加の場合）
-            filteredTasks = tasks.filter(task => !task.teamId && task.creatorId === filters.userId);
+            // プロジェクト閲覧可能なプロジェクト内のタスクも含める
+            const viewableProjectIds = new Set<string>();
+            
+            // プロジェクトタスクを抽出
+            const projectTasks = tasks.filter(task => task.projectId);
+            const uniqueProjectIds = new Set<string>();
+            for (const task of projectTasks) {
+              if (task.projectId) {
+                uniqueProjectIds.add(task.projectId);
+              }
+            }
+            
+            // 各プロジェクトの閲覧権限をチェック
+            for (const projectId of uniqueProjectIds) {
+              try {
+                const project = await this.projectService.getProject(projectId);
+                if (!project) continue;
+                
+                // プロジェクトの担当者が自分（担当者がいない場合は作成者）
+                const projectAssigneeId = project.assigneeId || project.ownerId;
+                if (projectAssigneeId === filters.userId) {
+                  viewableProjectIds.add(projectId);
+                  continue;
+                }
+                
+                // プロジェクト内に自分が担当するタスクがある
+                const assignedTasks = projectTasks.filter(
+                  task => task.projectId === projectId && task.assigneeId === filters.userId
+                );
+                if (assignedTasks.length > 0) {
+                  viewableProjectIds.add(projectId);
+                  continue;
+                }
+                
+                // プロジェクト内に自分が作成したタスクで担当者がいないものがある
+                const createdTasksWithoutAssignee = projectTasks.filter(
+                  task => task.projectId === projectId && 
+                          !task.assigneeId && 
+                          task.creatorId === filters.userId
+                );
+                if (createdTasksWithoutAssignee.length > 0) {
+                  viewableProjectIds.add(projectId);
+                }
+              } catch (error) {
+                console.error(`Error checking project ${projectId}:`, error);
+              }
+            }
+            
+            filteredTasks = tasks.filter(task => {
+              // 個人タスク（teamIdが未設定）で自分が作成者
+              if (!task.teamId && task.creatorId === filters.userId) {
+                return true;
+              }
+              // チームプロジェクトタスクで、プロジェクト閲覧可能かつ自分が担当/作成するタスク
+              if (task.projectId && viewableProjectIds.has(task.projectId)) {
+                // 自分が担当者（担当者がいない場合は作成者）のタスクのみを表示
+                if (task.assigneeId === filters.userId) {
+                  return true;
+                }
+                if (!task.assigneeId && task.creatorId === filters.userId) {
+                  return true;
+                }
+              }
+              return false;
+            });
           } else {
             // フォールバック: 個人タスク（teamIdが未設定）
             filteredTasks = tasks.filter(task => !task.teamId);
@@ -634,32 +756,155 @@ export class TaskService {
       // teamIdフィルタリング
       if (teamId === null) {
         // 個人モード: 自分が作成したタスク または 所属チームのタスクで自分が担当者
-        // または チームプロジェクトタスクで、そのプロジェクト内に自分が担当しているタスクがある場合
-        
-        // 担当タスクがあるプロジェクトIDのセットを作成
-        const projectIdsWithAssignedTasks = new Set<string>();
-        const assignedTasks = filteredTasks.filter(task => task.assigneeId === userId && task.projectId);
-        for (const task of assignedTasks) {
-          if (task.projectId) {
-            projectIdsWithAssignedTasks.add(task.projectId);
+        // または チームプロジェクトタスクで、プロジェクト閲覧可能かつ自分が担当/作成するタスク
+        if (userId && userTeamIds && userTeamIds.length > 0) {
+          const userTeamIdsArray = userTeamIds; // 型チェック用に変数に保存
+          
+          // プロジェクト閲覧可能なプロジェクトIDのセットを作成
+          // 1. プロジェクトの担当者が自分（担当者がいない場合は作成者）
+          // 2. プロジェクト内に自分が担当するタスクがある
+          // 3. プロジェクト内に自分が作成したタスクで担当者がいないものがある
+          const viewableProjectIds = new Set<string>();
+          
+          // プロジェクトタスクを抽出
+          const projectTasks = filteredTasks.filter(task => task.projectId);
+          const uniqueProjectIds = new Set<string>();
+          for (const task of projectTasks) {
+            if (task.projectId) {
+              uniqueProjectIds.add(task.projectId);
+            }
           }
+          
+          // 各プロジェクトの閲覧権限をチェック
+          for (const projectId of uniqueProjectIds) {
+            try {
+              const project = await this.projectService.getProject(projectId);
+              if (!project) continue;
+              
+              // プロジェクトの担当者が自分（担当者がいない場合は作成者）
+              const projectAssigneeId = project.assigneeId || project.ownerId;
+              if (projectAssigneeId === userId) {
+                viewableProjectIds.add(projectId);
+                continue;
+              }
+              
+              // プロジェクト内に自分が担当するタスクがある
+              const assignedTasks = projectTasks.filter(
+                task => task.projectId === projectId && task.assigneeId === userId
+              );
+              if (assignedTasks.length > 0) {
+                viewableProjectIds.add(projectId);
+                continue;
+              }
+              
+              // プロジェクト内に自分が作成したタスクで担当者がいないものがある
+              const createdTasksWithoutAssignee = projectTasks.filter(
+                task => task.projectId === projectId && 
+                        !task.assigneeId && 
+                        task.creatorId === userId
+              );
+              if (createdTasksWithoutAssignee.length > 0) {
+                viewableProjectIds.add(projectId);
+              }
+            } catch (error) {
+              console.error(`Error checking project ${projectId}:`, error);
+            }
+          }
+          
+          filteredTasks = filteredTasks.filter(task => {
+            // 個人タスク（teamIdが未設定）で自分が作成者
+            if (!task.teamId && task.creatorId === userId) {
+              return true;
+            }
+            // チームタスクで自分が担当者（担当者がいない場合は作成者）かつ所属チームに含まれる
+            if (task.teamId && userTeamIdsArray.includes(task.teamId)) {
+              if (task.assigneeId === userId) {
+                return true;
+              }
+              if (!task.assigneeId && task.creatorId === userId) {
+                return true;
+              }
+            }
+            // チームプロジェクトタスクで、プロジェクト閲覧可能かつ自分が担当/作成するタスク
+            if (task.projectId && viewableProjectIds.has(task.projectId)) {
+              // 自分が担当者（担当者がいない場合は作成者）のタスクのみを表示
+              if (task.assigneeId === userId) {
+                return true;
+              }
+              if (!task.assigneeId && task.creatorId === userId) {
+                return true;
+              }
+            }
+            return false;
+          });
+        } else if (userId) {
+          // フォールバック: 自分が作成したタスクのみ（チーム未参加の場合）
+          // プロジェクト閲覧可能なプロジェクト内のタスクも含める
+          const viewableProjectIds = new Set<string>();
+          
+          // プロジェクトタスクを抽出
+          const projectTasks = filteredTasks.filter(task => task.projectId);
+          const uniqueProjectIds = new Set<string>();
+          for (const task of projectTasks) {
+            if (task.projectId) {
+              uniqueProjectIds.add(task.projectId);
+            }
+          }
+          
+          // 各プロジェクトの閲覧権限をチェック
+          for (const projectId of uniqueProjectIds) {
+            try {
+              const project = await this.projectService.getProject(projectId);
+              if (!project) continue;
+              
+              // プロジェクトの担当者が自分（担当者がいない場合は作成者）
+              const projectAssigneeId = project.assigneeId || project.ownerId;
+              if (projectAssigneeId === userId) {
+                viewableProjectIds.add(projectId);
+                continue;
+              }
+              
+              // プロジェクト内に自分が担当するタスクがある
+              const assignedTasks = projectTasks.filter(
+                task => task.projectId === projectId && task.assigneeId === userId
+              );
+              if (assignedTasks.length > 0) {
+                viewableProjectIds.add(projectId);
+                continue;
+              }
+              
+              // プロジェクト内に自分が作成したタスクで担当者がいないものがある
+              const createdTasksWithoutAssignee = projectTasks.filter(
+                task => task.projectId === projectId && 
+                        !task.assigneeId && 
+                        task.creatorId === userId
+              );
+              if (createdTasksWithoutAssignee.length > 0) {
+                viewableProjectIds.add(projectId);
+              }
+            } catch (error) {
+              console.error(`Error checking project ${projectId}:`, error);
+            }
+          }
+          
+          filteredTasks = filteredTasks.filter(task => {
+            // 個人タスク（teamIdが未設定）で自分が作成者
+            if (!task.teamId && task.creatorId === userId) {
+              return true;
+            }
+            // チームプロジェクトタスクで、プロジェクト閲覧可能かつ自分が担当/作成するタスク
+            if (task.projectId && viewableProjectIds.has(task.projectId)) {
+              // 自分が担当者（担当者がいない場合は作成者）のタスクのみを表示
+              if (task.assigneeId === userId) {
+                return true;
+              }
+              if (!task.assigneeId && task.creatorId === userId) {
+                return true;
+              }
+            }
+            return false;
+          });
         }
-        
-        filteredTasks = filteredTasks.filter(task => {
-          // 個人タスク（teamIdが未設定）で自分が作成者
-          if (!task.teamId && task.creatorId === userId) {
-            return true;
-          }
-          // チームタスクで自分が担当者かつ所属チームに含まれる
-          if (task.teamId && task.assigneeId === userId && userTeamIds.includes(task.teamId)) {
-            return true;
-          }
-          // チームプロジェクトタスクで、そのプロジェクト内に自分が担当しているタスクがある場合
-          if (task.projectId && projectIdsWithAssignedTasks.has(task.projectId)) {
-            return true;
-          }
-          return false;
-        });
       } else if (teamId) {
         // チームモード: チームタスク（teamIdが一致）またはチームプロジェクトタスク
         const filteredTasksResult: Task[] = [];
@@ -740,32 +985,155 @@ export class TaskService {
       let filteredTasks = dateFilteredTasks;
       if (teamId === null) {
         // 個人モード: 自分が作成したタスク または 所属チームのタスクで自分が担当者
-        // または チームプロジェクトタスクで、そのプロジェクト内に自分が担当しているタスクがある場合
-        
-        // 担当タスクがあるプロジェクトIDのセットを作成
-        const projectIdsWithAssignedTasks = new Set<string>();
-        const assignedTasks = dateFilteredTasks.filter(task => task.assigneeId === userId && task.projectId);
-        for (const task of assignedTasks) {
-          if (task.projectId) {
-            projectIdsWithAssignedTasks.add(task.projectId);
+        // または チームプロジェクトタスクで、プロジェクト閲覧可能かつ自分が担当/作成するタスク
+        if (userId && userTeamIds && userTeamIds.length > 0) {
+          const userTeamIdsArray = userTeamIds; // 型チェック用に変数に保存
+          
+          // プロジェクト閲覧可能なプロジェクトIDのセットを作成
+          // 1. プロジェクトの担当者が自分（担当者がいない場合は作成者）
+          // 2. プロジェクト内に自分が担当するタスクがある
+          // 3. プロジェクト内に自分が作成したタスクで担当者がいないものがある
+          const viewableProjectIds = new Set<string>();
+          
+          // プロジェクトタスクを抽出
+          const projectTasks = dateFilteredTasks.filter(task => task.projectId);
+          const uniqueProjectIds = new Set<string>();
+          for (const task of projectTasks) {
+            if (task.projectId) {
+              uniqueProjectIds.add(task.projectId);
+            }
           }
+          
+          // 各プロジェクトの閲覧権限をチェック
+          for (const projectId of uniqueProjectIds) {
+            try {
+              const project = await this.projectService.getProject(projectId);
+              if (!project) continue;
+              
+              // プロジェクトの担当者が自分（担当者がいない場合は作成者）
+              const projectAssigneeId = project.assigneeId || project.ownerId;
+              if (projectAssigneeId === userId) {
+                viewableProjectIds.add(projectId);
+                continue;
+              }
+              
+              // プロジェクト内に自分が担当するタスクがある
+              const assignedTasks = projectTasks.filter(
+                task => task.projectId === projectId && task.assigneeId === userId
+              );
+              if (assignedTasks.length > 0) {
+                viewableProjectIds.add(projectId);
+                continue;
+              }
+              
+              // プロジェクト内に自分が作成したタスクで担当者がいないものがある
+              const createdTasksWithoutAssignee = projectTasks.filter(
+                task => task.projectId === projectId && 
+                        !task.assigneeId && 
+                        task.creatorId === userId
+              );
+              if (createdTasksWithoutAssignee.length > 0) {
+                viewableProjectIds.add(projectId);
+              }
+            } catch (error) {
+              console.error(`Error checking project ${projectId}:`, error);
+            }
+          }
+          
+          filteredTasks = dateFilteredTasks.filter(task => {
+            // 個人タスク（teamIdが未設定）で自分が作成者
+            if (!task.teamId && task.creatorId === userId) {
+              return true;
+            }
+            // チームタスクで自分が担当者（担当者がいない場合は作成者）かつ所属チームに含まれる
+            if (task.teamId && userTeamIdsArray.includes(task.teamId)) {
+              if (task.assigneeId === userId) {
+                return true;
+              }
+              if (!task.assigneeId && task.creatorId === userId) {
+                return true;
+              }
+            }
+            // チームプロジェクトタスクで、プロジェクト閲覧可能かつ自分が担当/作成するタスク
+            if (task.projectId && viewableProjectIds.has(task.projectId)) {
+              // 自分が担当者（担当者がいない場合は作成者）のタスクのみを表示
+              if (task.assigneeId === userId) {
+                return true;
+              }
+              if (!task.assigneeId && task.creatorId === userId) {
+                return true;
+              }
+            }
+            return false;
+          });
+        } else if (userId) {
+          // フォールバック: 自分が作成したタスクのみ（チーム未参加の場合）
+          // プロジェクト閲覧可能なプロジェクト内のタスクも含める
+          const viewableProjectIds = new Set<string>();
+          
+          // プロジェクトタスクを抽出
+          const projectTasks = dateFilteredTasks.filter(task => task.projectId);
+          const uniqueProjectIds = new Set<string>();
+          for (const task of projectTasks) {
+            if (task.projectId) {
+              uniqueProjectIds.add(task.projectId);
+            }
+          }
+          
+          // 各プロジェクトの閲覧権限をチェック
+          for (const projectId of uniqueProjectIds) {
+            try {
+              const project = await this.projectService.getProject(projectId);
+              if (!project) continue;
+              
+              // プロジェクトの担当者が自分（担当者がいない場合は作成者）
+              const projectAssigneeId = project.assigneeId || project.ownerId;
+              if (projectAssigneeId === userId) {
+                viewableProjectIds.add(projectId);
+                continue;
+              }
+              
+              // プロジェクト内に自分が担当するタスクがある
+              const assignedTasks = projectTasks.filter(
+                task => task.projectId === projectId && task.assigneeId === userId
+              );
+              if (assignedTasks.length > 0) {
+                viewableProjectIds.add(projectId);
+                continue;
+              }
+              
+              // プロジェクト内に自分が作成したタスクで担当者がいないものがある
+              const createdTasksWithoutAssignee = projectTasks.filter(
+                task => task.projectId === projectId && 
+                        !task.assigneeId && 
+                        task.creatorId === userId
+              );
+              if (createdTasksWithoutAssignee.length > 0) {
+                viewableProjectIds.add(projectId);
+              }
+            } catch (error) {
+              console.error(`Error checking project ${projectId}:`, error);
+            }
+          }
+          
+          filteredTasks = dateFilteredTasks.filter(task => {
+            // 個人タスク（teamIdが未設定）で自分が作成者
+            if (!task.teamId && task.creatorId === userId) {
+              return true;
+            }
+            // チームプロジェクトタスクで、プロジェクト閲覧可能かつ自分が担当/作成するタスク
+            if (task.projectId && viewableProjectIds.has(task.projectId)) {
+              // 自分が担当者（担当者がいない場合は作成者）のタスクのみを表示
+              if (task.assigneeId === userId) {
+                return true;
+              }
+              if (!task.assigneeId && task.creatorId === userId) {
+                return true;
+              }
+            }
+            return false;
+          });
         }
-        
-        filteredTasks = dateFilteredTasks.filter(task => {
-          // 個人タスク（teamIdが未設定）で自分が作成者
-          if (!task.teamId && task.creatorId === userId) {
-            return true;
-          }
-          // チームタスクで自分が担当者かつ所属チームに含まれる
-          if (task.teamId && task.assigneeId === userId && userTeamIds.includes(task.teamId)) {
-            return true;
-          }
-          // チームプロジェクトタスクで、そのプロジェクト内に自分が担当しているタスクがある場合
-          if (task.projectId && projectIdsWithAssignedTasks.has(task.projectId)) {
-            return true;
-          }
-          return false;
-        });
       } else if (teamId) {
         // チームモード: チームタスク（teamIdが一致）またはチームプロジェクトタスク
         const filteredTasksResult: Task[] = [];

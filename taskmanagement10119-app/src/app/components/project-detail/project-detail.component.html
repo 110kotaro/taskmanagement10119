@@ -171,61 +171,6 @@
       </div>
     </div>
 
-    <!-- ファイルセクション -->
-    <div class="files-section" *ngIf="!isFromArchive && canEdit">
-      <h2>ファイル</h2>
-      
-      <div class="file-upload">
-        <input 
-          type="file" 
-          multiple 
-          (change)="onFileSelected($event)"
-          id="fileInput"
-          style="display: none;">
-        <label for="fileInput" class="file-input-label">
-          📎 ファイルを選択
-        </label>
-        <button 
-          (click)="uploadFiles()" 
-          [disabled]="selectedFiles.length === 0 || isUploadingFiles"
-          class="upload-btn">
-          {{ isUploadingFiles ? 'アップロード中...' : 'アップロード' }}
-        </button>
-        <div *ngIf="selectedFiles.length > 0" class="selected-files">
-          選択済み: {{ selectedFiles.length }}個のファイル
-        </div>
-      </div>
-
-      <div class="files-list" *ngIf="project.files && project.files.length > 0">
-        <div *ngFor="let file of project.files" class="file-item">
-          <span class="file-name">{{ file.name }}</span>
-          <div class="file-actions">
-            <button class="download-btn" (click)="downloadFile(file.url, file.name)">ダウンロード</button>
-            <button class="delete-file-btn" (click)="deleteFile(file.id)">削除</button>
-          </div>
-        </div>
-      </div>
-      <div *ngIf="!project.files || project.files.length === 0" class="no-files">
-        ファイルはまだありません
-      </div>
-    </div>
-    
-    <!-- アーカイブから来た場合のファイル表示（読み取り専用） -->
-    <div class="files-section" *ngIf="isFromArchive">
-      <h2>ファイル</h2>
-      <div class="files-list" *ngIf="project.files && project.files.length > 0">
-        <div *ngFor="let file of project.files" class="file-item">
-          <span class="file-name">{{ file.name }}</span>
-          <div class="file-actions">
-            <button class="download-btn" (click)="downloadFile(file.url, file.name)">ダウンロード</button>
-          </div>
-        </div>
-      </div>
-      <div *ngIf="!project.files || project.files.length === 0" class="no-files">
-        ファイルはまだありません
-      </div>
-    </div>
-
     <!-- メンバー追加モーダル -->
     <div *ngIf="showMemberModal" class="modal-overlay" (click)="closeMemberModal()">
       <div class="modal-content" (click)="$event.stopPropagation()">

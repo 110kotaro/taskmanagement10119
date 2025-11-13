@@ -79,8 +79,6 @@ export class TaskCreateComponent implements OnInit {
   }
 
   async ngOnInit() {
-    await this.loadProjects();
-    
     const queryParams = this.route.snapshot.queryParamMap;
     
     // ユーザーが所属しているチームを取得
@@ -106,6 +104,12 @@ export class TaskCreateComponent implements OnInit {
       this.selectedTeamId = null;
       await this.loadUsers(); // 個人モードの場合は全ユーザーを読み込む（実際には使用しない）
     }
+    
+    // userTeamIdsを取得
+    const userTeamIds = this.userTeams.map(team => team.id);
+    
+    // プロジェクトを読み込む（viewModeとselectedTeamIdを設定した後）
+    await this.loadProjects(this.selectedTeamId, userTeamIds);
     
     // 個人モードの場合は担当者を自分自身に固定
     if (this.viewMode === 'personal') {
@@ -294,11 +298,11 @@ export class TaskCreateComponent implements OnInit {
     }
   }
 
-  async loadProjects() {
+  async loadProjects(teamId: string | null = null, userTeamIds: string[] = []) {
     try {
       const user = this.authService.currentUser;
       if (user) {
-        this.projects = await this.projectService.getProjectsForUser(user.uid);
+        this.projects = await this.projectService.getProjectsForUser(user.uid, teamId, userTeamIds);
       }
     } catch (error: any) {
       console.error('Error loading projects:', error);

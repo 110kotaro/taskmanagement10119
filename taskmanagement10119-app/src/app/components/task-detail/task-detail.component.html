@@ -346,61 +346,6 @@
           </div>
         </div>
       </div>
-
-      <!-- ファイルセクション -->
-      <div class="files-section" *ngIf="!isFromArchive">
-        <h3>ファイル</h3>
-        
-        <div class="file-upload">
-          <input 
-            type="file" 
-            multiple 
-            (change)="onFileSelected($event)"
-            id="fileInput"
-            style="display: none;">
-          <label for="fileInput" class="file-input-label">
-            📎 ファイルを選択
-          </label>
-          <button 
-            (click)="uploadFiles()" 
-            [disabled]="selectedFiles.length === 0 || isUploadingFiles"
-            class="upload-btn">
-            {{ isUploadingFiles ? 'アップロード中...' : 'アップロード' }}
-          </button>
-          <div *ngIf="selectedFiles.length > 0" class="selected-files">
-            選択済み: {{ selectedFiles.length }}個のファイル
-          </div>
-        </div>
-
-        <div class="files-list" *ngIf="task.files && task.files.length > 0">
-          <div *ngFor="let file of task.files" class="file-item">
-            <span class="file-name">{{ file.name }}</span>
-            <div class="file-actions">
-              <button class="download-btn" (click)="downloadFile(file.url, file.name)">ダウンロード</button>
-              <button class="delete-file-btn" (click)="deleteFile(file.id)">削除</button>
-            </div>
-          </div>
-        </div>
-        <div *ngIf="!task.files || task.files.length === 0" class="no-files">
-          ファイルはまだありません
-        </div>
-      </div>
-      
-      <!-- アーカイブから来た場合のファイル表示（読み取り専用） -->
-      <div class="files-section" *ngIf="isFromArchive">
-        <h3>ファイル</h3>
-        <div class="files-list" *ngIf="task.files && task.files.length > 0">
-          <div *ngFor="let file of task.files" class="file-item">
-            <span class="file-name">{{ file.name }}</span>
-            <div class="file-actions">
-              <button class="download-btn" (click)="downloadFile(file.url, file.name)">ダウンロード</button>
-            </div>
-          </div>
-        </div>
-        <div *ngIf="!task.files || task.files.length === 0" class="no-files">
-          ファイルはまだありません
-        </div>
-      </div>
     </div>
 
     <!-- 編集モード -->

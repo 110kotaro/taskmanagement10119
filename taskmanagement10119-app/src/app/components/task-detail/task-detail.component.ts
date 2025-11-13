@@ -11,8 +11,6 @@ import { ProjectService } from '../../services/project.service';
 import { TeamService } from '../../services/team.service';
 import { AuthService } from '../../services/auth.service';
 import { NotificationService } from '../../services/notification.service';
-// @ts-ignore - StorageServiceが認識されない場合は一時的に無視
-import { StorageService } from '../../services/storage.service';
 import { Project } from '../../models/project.model';
 import { Task, TaskStatus, PriorityLabel, TaskType, SubTask, Comment, WorkSession, WorkSessionChangeLog, RecurrenceType } from '../../models/task.model';
 import { User } from '../../models/user.model';
@@ -37,7 +35,6 @@ export class TaskDetailComponent implements OnInit, OnDestroy {
   private teamService = inject(TeamService);
   private authService = inject(AuthService);
   private notificationService = inject(NotificationService);
-  private storageService = inject(StorageService);
   private fb = inject(FormBuilder);
 
   task: Task | null = null;
@@ -54,8 +51,6 @@ export class TaskDetailComponent implements OnInit, OnDestroy {
   showCommentsTab = false;
   unreadCommentCount = 0; // 未読コメント数
   readCommentIds: Set<string> = new Set(); // 既読コメントIDのセット
-  selectedFiles: File[] = [];
-  isUploadingFiles = false;
   manualProgressValue: number = 0; // 手動入力中の進捗率値
   showManualInput: boolean = false; // 手動入力欄を表示するかどうか
   showWorkTimeDetails = false; // 作業時間詳細の表示/非表示
@@ -1620,84 +1615,6 @@ export class TaskDetailComponent implements OnInit, OnDestroy {
     });
   }
 
-  // ファイル関連メソッド
-  onFileSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    if (input.files && input.files.length > 0) {
-      this.selectedFiles = Array.from(input.files);
-    }
-  }
-
-  async uploadFiles(): Promise<void> {
-    if (!this.task || this.selectedFiles.length === 0) return;
-
-    try {
-      this.isUploadingFiles = true;
-      const taskId = this.task.id;
-      type UploadResult = { id: string; name: string; url: string; uploadedAt: Timestamp };
-      const uploadPromises: Promise<UploadResult>[] = this.selectedFiles.map((file: File) => {
-        // @ts-ignore - StorageServiceの型推論の問題を回避
-        return this.storageService.uploadFile(file, taskId);
-      });
-
-      const uploadedFiles = await Promise.all(uploadPromises);
-      const currentFiles = this.task.files || [];
-      const updatedFiles = [...currentFiles, ...uploadedFiles];
-
-      await this.taskService.updateTask(this.task.id, {
-        files: updatedFiles
-      });
-
-      this.selectedFiles = [];
-      await this.loadTask(this.task.id);
-      alert('ファイルをアップロードしました');
-    } catch (error: any) {
-      alert('ファイルのアップロードに失敗しました: ' + error.message);
-    } finally {
-      this.isUploadingFiles = false;
-    }
-  }
-
-  async deleteFile(fileId: string): Promise<void> {
-    if (!this.task) return;
-
-    try {
-      if (!this.task.files) return;
-      
-      type FileType = { id: string; url: string; name: string; uploadedAt: Timestamp };
-      const fileArray: FileType[] = this.task.files;
-      const file = fileArray.find((f: FileType) => f.id === fileId);
-      if (!file) return;
-
-      if (confirm('このファイルを削除しますか？')) {
-        // Storageからファイルを削除
-        const fileUrl: string = file.url;
-        // @ts-ignore - StorageServiceの型推論の問題を回避
-        await this.storageService.deleteFile(fileUrl);
-
-        // タスクからファイル情報を削除
-        const updatedFiles = this.task.files?.filter(f => f.id !== fileId) || [];
-        await this.taskService.updateTask(this.task.id, {
-          files: updatedFiles
-        });
-
-        await this.loadTask(this.task.id);
-        alert('ファイルを削除しました');
-      }
-    } catch (error: any) {
-      alert('ファイルの削除に失敗しました: ' + error.message);
-    }
-  }
-
-  downloadFile(fileUrl: string, fileName: string): void {
-    const link = document.createElement('a');
-    link.href = fileUrl;
-    link.download = fileName;
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
 
   // 作業時間詳細関連メソッド
   toggleWorkTimeDetails() {

@@ -9,7 +9,6 @@ import { ProjectService } from '../../services/project.service';
 import { TaskService } from '../../services/task.service';
 import { TeamService } from '../../services/team.service';
 import { AuthService } from '../../services/auth.service';
-import { StorageService } from '../../services/storage.service';
 import { NotificationService } from '../../services/notification.service';
 import { Project, ProjectRole, ProjectStatus } from '../../models/project.model';
 import { Task, Comment, TaskStatus } from '../../models/task.model';
@@ -66,15 +65,10 @@ export class ProjectDetailComponent implements OnInit {
   taskDeletionMode: 'all' | 'partial' | 'none' = 'none';
   selectedTaskIdsForDeletion: Set<string> = new Set();
 
-  // ファイル関連
-  selectedFiles: File[] = [];
-  isUploadingFiles = false;
-
   ProjectRole = ProjectRole; // テンプレートで使用するため
 
   authService = inject(AuthService); // テンプレートで使用するためpublic
   private teamService = inject(TeamService);
-  private storageService = inject(StorageService);
   private notificationService = inject(NotificationService);
 
   // コメント関連
@@ -125,10 +119,35 @@ export class ProjectDetailComponent implements OnInit {
         
         // 未読コメント数を計算
         await this.loadUnreadCommentCount();
-        this.tasks = await this.taskService.getTasks({ 
-          projectId: projectId,
-          isDeleted: false 
-        });
+        
+        // 個人モードの場合のみ、自分が担当/作成するタスクのみを表示
+        const viewMode = localStorage.getItem('viewMode') === 'team' ? 'team' : 'personal';
+        const user = this.authService.currentUser;
+        if (viewMode === 'personal' && user) {
+          // 自分が担当しているタスクを取得
+          const assignedTasks = await this.taskService.getTasks({ 
+            projectId: projectId,
+            isDeleted: false,
+            assigneeId: user.uid
+          });
+          
+          // 自分が作成したタスクで担当者がいないものを取得
+          const createdTasksWithoutAssignee = await this.taskService.getTasks({
+            projectId: projectId,
+            isDeleted: false,
+            creatorId: user.uid
+          });
+          const tasksWithoutAssignee = createdTasksWithoutAssignee.filter(task => !task.assigneeId);
+          
+          // 担当タスクと作成者で担当者がいないタスクを結合
+          this.tasks = [...assignedTasks, ...tasksWithoutAssignee];
+        } else {
+          // チームモードの場合は全タスクを表示
+          this.tasks = await this.taskService.getTasks({ 
+            projectId: projectId,
+            isDeleted: false 
+          });
+        }
         
         // プロジェクトの完了率を再計算して最新の状態を反映
         await this.projectService.recalculateProjectCompletionRate(projectId);
@@ -558,10 +577,34 @@ export class ProjectDetailComponent implements OnInit {
 
   async loadProjectTasks(projectId: string) {
     try {
-      this.tasks = await this.taskService.getTasks({ 
-        projectId: projectId,
-        isDeleted: false 
-      });
+      // 個人モードの場合のみ、自分が担当/作成するタスクのみを表示
+      const viewMode = localStorage.getItem('viewMode') === 'team' ? 'team' : 'personal';
+      const user = this.authService.currentUser;
+      if (viewMode === 'personal' && user) {
+        // 自分が担当しているタスクを取得
+        const assignedTasks = await this.taskService.getTasks({ 
+          projectId: projectId,
+          isDeleted: false,
+          assigneeId: user.uid
+        });
+        
+        // 自分が作成したタスクで担当者がいないものを取得
+        const createdTasksWithoutAssignee = await this.taskService.getTasks({
+          projectId: projectId,
+          isDeleted: false,
+          creatorId: user.uid
+        });
+        const tasksWithoutAssignee = createdTasksWithoutAssignee.filter(task => !task.assigneeId);
+        
+        // 担当タスクと作成者で担当者がいないタスクを結合
+        this.tasks = [...assignedTasks, ...tasksWithoutAssignee];
+      } else {
+        // チームモードの場合は全タスクを表示
+        this.tasks = await this.taskService.getTasks({ 
+          projectId: projectId,
+          isDeleted: false 
+        });
+      }
     } catch (error) {
       console.error('Error loading project tasks:', error);
     }
@@ -616,78 +659,6 @@ export class ProjectDetailComponent implements OnInit {
     }
   }
 
-  // ファイル関連メソッド
-  onFileSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    if (input.files && input.files.length > 0) {
-      this.selectedFiles = Array.from(input.files);
-    }
-  }
-
-  async uploadFiles(): Promise<void> {
-    if (!this.project || this.selectedFiles.length === 0) return;
-
-    try {
-      this.isUploadingFiles = true;
-      const projectId = this.project.id;
-      type UploadResult = { id: string; name: string; url: string; uploadedAt: Timestamp };
-      const uploadPromises: Promise<UploadResult>[] = this.selectedFiles.map((file: File) => {
-        // @ts-ignore - StorageServiceの型推論の問題を回避
-        return this.storageService.uploadProjectFile(file, projectId);
-      });
-
-      const uploadedFiles = await Promise.all(uploadPromises);
-      const currentFiles = this.project.files || [];
-      const updatedFiles = [...currentFiles, ...uploadedFiles];
-
-      await this.projectService.updateProject(this.project.id, {
-        files: updatedFiles
-      });
-
-      this.selectedFiles = [];
-      await this.loadProject(this.project.id);
-      alert('ファイルをアップロードしました');
-    } catch (error: any) {
-      alert('ファイルのアップロードに失敗しました: ' + error.message);
-    } finally {
-      this.isUploadingFiles = false;
-    }
-  }
-
-  async deleteFile(fileId: string): Promise<void> {
-    if (!this.project) return;
-
-    try {
-      if (!this.project.files) return;
-      
-      type FileType = { id: string; url: string; name: string; uploadedAt: Timestamp };
-      const fileArray: FileType[] = this.project.files;
-      const file = fileArray.find((f: FileType) => f.id === fileId);
-      if (!file) return;
-
-      if (confirm('このファイルを削除しますか？')) {
-        // Storageからファイルを削除
-        const fileUrl: string = file.url;
-        // @ts-ignore - StorageServiceの型推論の問題を回避
-        await this.storageService.deleteFile(fileUrl);
-
-        // プロジェクトからファイル情報を削除
-        const updatedFiles = this.project.files?.filter(f => f.id !== fileId) || [];
-        await this.projectService.updateProject(this.project.id, {
-          files: updatedFiles
-        });
-
-        await this.loadProject(this.project.id);
-        alert('ファイルを削除しました');
-      }
-    } catch (error: any) {
-      alert('ファイルの削除に失敗しました: ' + error.message);
-    }
-  }
-
-  downloadFile(fileUrl: string, fileName: string): void {
-    window.open(fileUrl, '_blank');
-  }
 
   // コメント関連メソッド
   async loadMentionableUsers() {

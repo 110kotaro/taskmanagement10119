@@ -308,11 +308,45 @@ export class ProjectService {
   }
 
   // プロジェクトの閲覧権限をチェック（オーナー、メンバー、またはチームメンバー）
-  async canViewProject(projectId: string, userId: string): Promise<boolean> {
+  async canViewProject(projectId: string, userId: string, teamId: string | null = null): Promise<boolean> {
     try {
       const project = await this.getProject(projectId);
       if (!project) return false;
       
+      // 個人モードの場合のみ新しい条件を適用
+      if (teamId === null) {
+        // 自分が担当者のプロジェクト（担当者がいない場合は作成者の）
+        const projectAssigneeId = project.assigneeId || project.ownerId;
+        if (projectAssigneeId === userId) {
+          return true;
+        }
+        
+        // 自分が担当者のタスクがあるプロジェクト（担当者がいない場合は作成者の）
+        const taskService = this.injector.get(TaskService);
+        const assignedTasks = await taskService.getTasks({
+          projectId: projectId,
+          isDeleted: false,
+          assigneeId: userId
+        });
+        if (assignedTasks.length > 0) {
+          return true;
+        }
+        
+        // 自分が作成したタスクで担当者がいないものがプロジェクト内にある場合
+        const createdTasksWithoutAssignee = await taskService.getTasks({
+          projectId: projectId,
+          isDeleted: false,
+          creatorId: userId
+        });
+        const tasksWithoutAssignee = createdTasksWithoutAssignee.filter(task => !task.assigneeId);
+        if (tasksWithoutAssignee.length > 0) {
+          return true;
+        }
+        
+        return false;
+      }
+      
+      // チームモードの場合は従来の条件を適用
       // オーナーは閲覧可能
       if (this.hasOwnerPermissions(userId, project)) return true;
       
@@ -661,33 +695,39 @@ export class ProjectService {
 
       // 個人/チームモードに応じてフィルタリング
       if (teamId === null) {
-        // 個人モード: 自分が作成したプロジェクト または 自分が所属しているプロジェクト
-        // または チームプロジェクトで、そのプロジェクト内に自分が担当しているタスクがある場合
+        // 個人モード: 自分が担当者のプロジェクト（担当者がいない場合は作成者の）
+        // または 自分が担当者のタスクがあるプロジェクト（担当者がいない場合は作成者の）
         const taskService = this.injector.get(TaskService);
-        const userTasks = await taskService.getTasks({
+        
+        // 自分が担当しているタスクを取得
+        const assignedTasks = await taskService.getTasks({
           isDeleted: false,
           assigneeId: userId
         });
         
-        // 担当タスクがあるプロジェクトIDのセットを作成
-        const projectIdsWithAssignedTasks = new Set<string>();
-        for (const task of userTasks) {
+        // 自分が作成したタスクで担当者がいないものを取得
+        const createdTasksWithoutAssignee = await taskService.getTasks({
+          isDeleted: false,
+          creatorId: userId
+        });
+        const tasksWithoutAssignee = createdTasksWithoutAssignee.filter(task => !task.assigneeId);
+        
+        // 担当タスクまたは作成者で担当者がいないタスクがあるプロジェクトIDのセットを作成
+        const projectIdsWithRelevantTasks = new Set<string>();
+        for (const task of [...assignedTasks, ...tasksWithoutAssignee]) {
           if (task.projectId) {
-            projectIdsWithAssignedTasks.add(task.projectId);
+            projectIdsWithRelevantTasks.add(task.projectId);
           }
         }
         
         projects = projects.filter(project => {
-          // 自分がオーナー（作成者）のプロジェクト
-          if (project.ownerId === userId) {
+          // 自分が担当者のプロジェクト（担当者がいない場合は作成者の）
+          const projectAssigneeId = project.assigneeId || project.ownerId;
+          if (projectAssigneeId === userId) {
             return true;
           }
-          // 自分がメンバーとして参加しているプロジェクト
-          if (project.members && project.members.some(member => member.userId === userId)) {
-            return true;
-          }
-          // チームプロジェクトで、そのプロジェクト内に自分が担当しているタスクがある場合
-          if (project.teamId && projectIdsWithAssignedTasks.has(project.id)) {
+          // 自分が担当者のタスクがあるプロジェクト（担当者がいない場合は作成者の）
+          if (projectIdsWithRelevantTasks.has(project.id)) {
             return true;
           }
           return false;
