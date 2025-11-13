@@ -207,6 +207,36 @@ export class SettingsComponent implements OnInit {
                  settingKey === 'teamPermissionChangeWebPush') {
         this.notificationSettings.teamWebPush = true;
       }
+    } else {
+      // 個別設定がOFFになった場合、全ての個別設定がOFFならカテゴリ設定もOFFにする
+      if (settingKey === 'taskCreatedWebPush' || settingKey === 'taskUpdatedWebPush' || 
+          settingKey === 'taskDeletedWebPush' || settingKey === 'taskRestoredWebPush' || 
+          settingKey === 'taskCompletedWebPush') {
+        if (this.areAllTaskWebPushIndividualSettingsOff()) {
+          this.notificationSettings.taskWebPush = false;
+        }
+      } else if (settingKey === 'projectCreatedWebPush' || settingKey === 'projectUpdatedWebPush' ||
+                 settingKey === 'projectDeletedWebPush' || settingKey === 'projectRestoredWebPush' ||
+                 settingKey === 'projectCompletedWebPush' ||
+                 settingKey === 'projectMemberAddedWebPush' || settingKey === 'projectMemberRemovedWebPush') {
+        if (this.areAllProjectWebPushIndividualSettingsOff()) {
+          this.notificationSettings.projectWebPush = false;
+        }
+      } else if (settingKey === 'taskReminderWebPush') {
+        if (this.areAllReminderWebPushIndividualSettingsOff()) {
+          this.notificationSettings.reminderWebPush = false;
+        }
+      } else if (settingKey === 'startDateOverdueWebPush' || settingKey === 'endDateOverdueWebPush') {
+        if (this.areAllDateCheckWebPushIndividualSettingsOff()) {
+          this.notificationSettings.dateCheckWebPush = false;
+        }
+      } else if (settingKey === 'teamInvitationWebPush' || settingKey === 'teamInvitationAcceptedWebPush' ||
+                 settingKey === 'teamInvitationRejectedWebPush' || settingKey === 'teamLeaveWebPush' || 
+                 settingKey === 'teamPermissionChangeWebPush') {
+        if (this.areAllTeamWebPushIndividualSettingsOff()) {
+          this.notificationSettings.teamWebPush = false;
+        }
+      }
     }
     await this.saveNotificationSettings();
   }
@@ -232,15 +262,44 @@ export class SettingsComponent implements OnInit {
                  settingKey === 'teamPermissionChange') {
         this.notificationSettings.team = true;
       }
+    } else {
+      // 個別設定がOFFになった場合、全ての個別設定がOFFならカテゴリ設定もOFFにする
+      if (settingKey === 'taskCreated' || settingKey === 'taskUpdated' || settingKey === 'taskDeleted' || 
+          settingKey === 'taskRestored' || settingKey === 'taskCompleted') {
+        if (this.areAllTaskIndividualSettingsOff()) {
+          this.notificationSettings.task = false;
+        }
+      } else if (settingKey === 'projectCreated' || settingKey === 'projectUpdated' ||
+                 settingKey === 'projectDeleted' || settingKey === 'projectRestored' ||
+                 settingKey === 'projectCompleted' ||
+                 settingKey === 'projectMemberAdded' || settingKey === 'projectMemberRemoved') {
+        if (this.areAllProjectIndividualSettingsOff()) {
+          this.notificationSettings.project = false;
+        }
+      } else if (settingKey === 'taskReminder') {
+        if (this.areAllReminderIndividualSettingsOff()) {
+          this.notificationSettings.reminder = false;
+        }
+      } else if (settingKey === 'startDateOverdue' || settingKey === 'endDateOverdue') {
+        if (this.areAllDateCheckIndividualSettingsOff()) {
+          this.notificationSettings.dateCheck = false;
+        }
+      } else if (settingKey === 'teamInvitation' || settingKey === 'teamInvitationAccepted' || 
+                 settingKey === 'teamInvitationRejected' || settingKey === 'teamLeave' || 
+                 settingKey === 'teamPermissionChange') {
+        if (this.areAllTeamIndividualSettingsOff()) {
+          this.notificationSettings.team = false;
+        }
+      }
     }
     await this.saveNotificationSettings();
   }
 
   async onNotificationCategoryChange(category: 'task' | 'project' | 'reminder' | 'team' | 'dateCheck', value: boolean) {
-    // カテゴリのチェックに連動して、お知らせ通知の個別設定のみを全てON/OFFにする
-    // カテゴリ設定（notificationSettings[category]）は変更しない
+    // カテゴリ設定を更新する（WebPushと同じロジック）
+    this.notificationSettings[category] = value;
     
-    // カテゴリのチェックに連動して、お知らせ通知の個別設定のみを全てON/OFFにする
+    // カテゴリのチェックに連動して、お知らせ通知の個別設定も全てON/OFFにする
     if (category === 'task') {
       this.notificationSettings.taskCreated = value;
       this.notificationSettings.taskUpdated = value;
@@ -272,6 +331,104 @@ export class SettingsComponent implements OnInit {
 
   toggleCategory(category: string) {
     this.expandedCategories[category] = !this.expandedCategories[category];
+  }
+
+  // 各カテゴリの個別設定が全てOFFかどうかをチェックするヘルパーメソッド
+  areAllTaskIndividualSettingsOff(): boolean {
+    return !this.notificationSettings.taskCreated &&
+           !this.notificationSettings.taskUpdated &&
+           !this.notificationSettings.taskDeleted &&
+           !this.notificationSettings.taskRestored &&
+           !this.notificationSettings.taskCompleted;
+  }
+
+  areAllProjectIndividualSettingsOff(): boolean {
+    return !this.notificationSettings.projectCreated &&
+           !this.notificationSettings.projectUpdated &&
+           !this.notificationSettings.projectDeleted &&
+           !this.notificationSettings.projectRestored &&
+           !this.notificationSettings.projectCompleted &&
+           !this.notificationSettings.projectMemberAdded &&
+           !this.notificationSettings.projectMemberRemoved;
+  }
+
+  areAllReminderIndividualSettingsOff(): boolean {
+    return !this.notificationSettings.taskReminder;
+  }
+
+  areAllDateCheckIndividualSettingsOff(): boolean {
+    return !this.notificationSettings.startDateOverdue &&
+           !this.notificationSettings.endDateOverdue;
+  }
+
+  areAllTeamIndividualSettingsOff(): boolean {
+    return !this.notificationSettings.teamInvitation &&
+           !this.notificationSettings.teamInvitationAccepted &&
+           !this.notificationSettings.teamInvitationRejected &&
+           !this.notificationSettings.teamLeave &&
+           !this.notificationSettings.teamPermissionChange;
+  }
+
+  // WebPush用のヘルパーメソッド
+  areAllTaskWebPushIndividualSettingsOff(): boolean {
+    return !this.notificationSettings.taskCreatedWebPush &&
+           !this.notificationSettings.taskUpdatedWebPush &&
+           !this.notificationSettings.taskDeletedWebPush &&
+           !this.notificationSettings.taskRestoredWebPush &&
+           !this.notificationSettings.taskCompletedWebPush;
+  }
+
+  areAllProjectWebPushIndividualSettingsOff(): boolean {
+    return !this.notificationSettings.projectCreatedWebPush &&
+           !this.notificationSettings.projectUpdatedWebPush &&
+           !this.notificationSettings.projectDeletedWebPush &&
+           !this.notificationSettings.projectRestoredWebPush &&
+           !this.notificationSettings.projectCompletedWebPush &&
+           !this.notificationSettings.projectMemberAddedWebPush &&
+           !this.notificationSettings.projectMemberRemovedWebPush;
+  }
+
+  areAllReminderWebPushIndividualSettingsOff(): boolean {
+    return !this.notificationSettings.taskReminderWebPush;
+  }
+
+  areAllDateCheckWebPushIndividualSettingsOff(): boolean {
+    return !this.notificationSettings.startDateOverdueWebPush &&
+           !this.notificationSettings.endDateOverdueWebPush;
+  }
+
+  areAllTeamWebPushIndividualSettingsOff(): boolean {
+    return !this.notificationSettings.teamInvitationWebPush &&
+           !this.notificationSettings.teamInvitationAcceptedWebPush &&
+           !this.notificationSettings.teamInvitationRejectedWebPush &&
+           !this.notificationSettings.teamLeaveWebPush &&
+           !this.notificationSettings.teamPermissionChangeWebPush;
+  }
+
+  // カテゴリヘッダー用：お知らせ通知とWebPush通知の両方が全てOFFかどうかをチェック
+  areAllTaskSettingsOff(): boolean {
+    return this.areAllTaskIndividualSettingsOff() && 
+           this.areAllTaskWebPushIndividualSettingsOff();
+  }
+
+  areAllProjectSettingsOff(): boolean {
+    return this.areAllProjectIndividualSettingsOff() && 
+           this.areAllProjectWebPushIndividualSettingsOff();
+  }
+
+  areAllReminderSettingsOff(): boolean {
+    return this.areAllReminderIndividualSettingsOff() && 
+           this.areAllReminderWebPushIndividualSettingsOff();
+  }
+
+  areAllDateCheckSettingsOff(): boolean {
+    return this.areAllDateCheckIndividualSettingsOff() && 
+           this.areAllDateCheckWebPushIndividualSettingsOff();
+  }
+
+  areAllTeamSettingsOff(): boolean {
+    return this.areAllTeamIndividualSettingsOff() && 
+           this.areAllTeamWebPushIndividualSettingsOff();
   }
 
   async saveNotificationSettings() {

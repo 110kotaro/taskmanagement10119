@@ -174,6 +174,22 @@ export class AppComponent implements OnInit, OnDestroy {
       }
     });
     
+    // 通知作成を監視して未読件数を更新
+    window.addEventListener('notificationCreated', ((event: CustomEvent) => {
+      const user = this.authService.currentUser;
+      if (user && event.detail.userId === user.uid) {
+        this.loadUnreadCount();
+      }
+    }) as EventListener);
+    
+    // 通知既読を監視して未読件数を更新
+    window.addEventListener('notificationRead', ((event: CustomEvent) => {
+      const user = this.authService.currentUser;
+      if (user && event.detail.userId === user.uid) {
+        this.loadUnreadCount();
+      }
+    }) as EventListener);
+    
     // 初期ルートを設定
     this.currentRoute = this.router.url;
   }

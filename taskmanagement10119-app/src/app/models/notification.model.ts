@@ -41,6 +41,7 @@ export interface Notification {
   createdAt: Timestamp;
   isDeleted?: boolean; // 削除フラグ
   deletedAt?: Timestamp; // 削除日時
+  showInAppNotifications?: boolean; // お知らせ画面に表示するかどうか（お知らせ通知の設定がONだった場合のみtrue）
 }
 
 // 通知タイプからカテゴリを取得する関数

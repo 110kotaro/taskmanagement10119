@@ -57,7 +57,7 @@
             <label class="checkbox-label" (click)="$event.stopPropagation()">
               <input 
                 type="checkbox" 
-                [checked]="notificationSettings['task']"
+                [checked]="!areAllTaskSettingsOff()"
                 (change)="onNotificationSettingChange('task', $any($event.target).checked)">
             </label>
             <div class="category-content" (click)="toggleCategory('task')">
@@ -76,7 +76,7 @@
                 <label class="checkbox-label">
                   <input 
                     type="checkbox" 
-                    [checked]="notificationSettings['task']"
+                    [checked]="!areAllTaskIndividualSettingsOff()"
                     (change)="onNotificationCategoryChange('task', $any($event.target).checked)">
                 </label>
                 <span class="notification-category-title">お知らせに通知（タスク関連）</span>
@@ -126,7 +126,7 @@
                 <label class="checkbox-label">
                   <input 
                     type="checkbox" 
-                    [checked]="notificationSettings['taskWebPush'] !== false"
+                    [checked]="!areAllTaskWebPushIndividualSettingsOff()"
                     (change)="onWebPushCategoryChange('task', $any($event.target).checked)">
                 </label>
                 <span class="webpush-category-title">📱 WebPush通知（タスク関連）</span>
@@ -178,7 +178,7 @@
             <label class="checkbox-label" (click)="$event.stopPropagation()">
               <input 
                 type="checkbox" 
-                [checked]="notificationSettings['project']"
+                [checked]="!areAllProjectSettingsOff()"
                 (change)="onNotificationSettingChange('project', $any($event.target).checked)">
             </label>
             <div class="category-content" (click)="toggleCategory('project')">
@@ -197,7 +197,7 @@
                 <label class="checkbox-label">
                   <input 
                     type="checkbox" 
-                    [checked]="notificationSettings['project']"
+                    [checked]="!areAllProjectIndividualSettingsOff()"
                     (change)="onNotificationCategoryChange('project', $any($event.target).checked)">
                 </label>
                 <span class="notification-category-title">お知らせに通知（プロジェクト関連）</span>
@@ -261,7 +261,7 @@
                 <label class="checkbox-label">
                   <input 
                     type="checkbox" 
-                    [checked]="notificationSettings['projectWebPush'] !== false"
+                    [checked]="!areAllProjectWebPushIndividualSettingsOff()"
                     (change)="onWebPushCategoryChange('project', $any($event.target).checked)">
                 </label>
                 <span class="webpush-category-title">📱 WebPush通知（プロジェクト関連）</span>
@@ -327,7 +327,7 @@
             <label class="checkbox-label" (click)="$event.stopPropagation()">
               <input 
                 type="checkbox" 
-                [checked]="notificationSettings['reminder']"
+                [checked]="!areAllReminderSettingsOff()"
                 (change)="onNotificationSettingChange('reminder', $any($event.target).checked)">
             </label>
             <div class="category-content" (click)="toggleCategory('reminder')">
@@ -346,7 +346,7 @@
                 <label class="checkbox-label">
                   <input 
                     type="checkbox" 
-                    [checked]="notificationSettings['reminder']"
+                    [checked]="!areAllReminderIndividualSettingsOff()"
                     (change)="onNotificationCategoryChange('reminder', $any($event.target).checked)">
                 </label>
                 <span class="notification-category-title">お知らせに通知（リマインダー）</span>
@@ -368,7 +368,7 @@
                 <label class="checkbox-label">
                   <input 
                     type="checkbox" 
-                    [checked]="notificationSettings['reminderWebPush'] !== false"
+                    [checked]="!areAllReminderWebPushIndividualSettingsOff()"
                     (change)="onWebPushCategoryChange('reminder', $any($event.target).checked)">
                 </label>
                 <span class="webpush-category-title">📱 WebPush通知（リマインダー）</span>
@@ -392,7 +392,7 @@
             <label class="checkbox-label" (click)="$event.stopPropagation()">
               <input 
                 type="checkbox" 
-                [checked]="notificationSettings['dateCheck']"
+                [checked]="!areAllDateCheckSettingsOff()"
                 (change)="onNotificationSettingChange('dateCheck', $any($event.target).checked)">
             </label>
             <div class="category-content" (click)="toggleCategory('dateCheck')">
@@ -411,7 +411,7 @@
                 <label class="checkbox-label">
                   <input 
                     type="checkbox" 
-                    [checked]="notificationSettings['dateCheck']"
+                    [checked]="!areAllDateCheckIndividualSettingsOff()"
                     (change)="onNotificationCategoryChange('dateCheck', $any($event.target).checked)">
                 </label>
                 <span class="notification-category-title">お知らせに通知（日付チェック）</span>
@@ -440,7 +440,7 @@
                 <label class="checkbox-label">
                   <input 
                     type="checkbox" 
-                    [checked]="notificationSettings['dateCheckWebPush'] !== false"
+                    [checked]="!areAllDateCheckWebPushIndividualSettingsOff()"
                     (change)="onWebPushCategoryChange('dateCheck', $any($event.target).checked)">
                 </label>
                 <span class="webpush-category-title">📱 WebPush通知（日付チェック）</span>
@@ -471,7 +471,7 @@
             <label class="checkbox-label" (click)="$event.stopPropagation()">
               <input 
                 type="checkbox" 
-                [checked]="notificationSettings['team']"
+                [checked]="!areAllTeamSettingsOff()"
                 (change)="onNotificationSettingChange('team', $any($event.target).checked)">
             </label>
             <div class="category-content" (click)="toggleCategory('team')">
@@ -490,7 +490,7 @@
                 <label class="checkbox-label">
                   <input 
                     type="checkbox" 
-                    [checked]="notificationSettings['team']"
+                    [checked]="!areAllTeamIndividualSettingsOff()"
                     (change)="onNotificationCategoryChange('team', $any($event.target).checked)">
                 </label>
                 <span class="notification-category-title">お知らせに通知（チーム）</span>
@@ -540,7 +540,7 @@
                 <label class="checkbox-label">
                   <input 
                     type="checkbox" 
-                    [checked]="notificationSettings['teamWebPush'] !== false"
+                    [checked]="!areAllTeamWebPushIndividualSettingsOff()"
                     (change)="onWebPushCategoryChange('team', $any($event.target).checked)">
                 </label>
                 <span class="webpush-category-title">📱 WebPush通知（チーム）</span>

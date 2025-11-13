@@ -7,7 +7,8 @@ import { db } from '../../../firebase-config';
 import { NotificationService } from '../../services/notification.service';
 import { AuthService } from '../../services/auth.service';
 import { TeamService } from '../../services/team.service';
-import { Notification, NotificationType } from '../../models/notification.model';
+import { Notification, NotificationType, getNotificationCategory, getNotificationSettingKey } from '../../models/notification.model';
+import { NotificationPreferences } from '../../models/user.model';
 import { TeamInvitation } from '../../models/team-invitation.model';
 import { NextTaskCandidatesComponent } from '../next-task-candidates/next-task-candidates.component';
 
@@ -36,10 +37,28 @@ export class NotificationsComponent implements OnInit {
   // フィルター
   filterType: 'all' | 'read' | 'unread' | 'trash' = 'all';
   showDeleted = false;
+  
+  // 通知設定
+  notificationSettings: NotificationPreferences | null = null;
 
   async ngOnInit() {
     await this.loadUserTeams();
+    await this.loadNotificationSettings();
     this.loadNotifications();
+  }
+
+  async loadNotificationSettings() {
+    try {
+      const user = this.authService.currentUser;
+      if (user) {
+        const userData = await this.authService.getUserData(user.uid);
+        if (userData && userData.notificationSettings) {
+          this.notificationSettings = userData.notificationSettings;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading notification settings:', error);
+    }
   }
 
   async loadUserTeams() {
@@ -295,6 +314,18 @@ export class NotificationsComponent implements OnInit {
     } else {
       // 通常: 削除済みを除外（isDeletedがtrueでない場合を含める）
       filtered = filtered.filter(n => n.isDeleted !== true);
+      
+      // お知らせ通知の設定をチェック
+      // フラグがない通知（既存の通知）は全て表示（後方互換性）
+      // フラグがある通知は、showInAppNotificationsがtrueの場合のみ表示
+      filtered = filtered.filter(n => {
+        // showInAppNotificationsフィールドがない場合（既存の通知）は全て表示
+        if (n.showInAppNotifications === undefined) {
+          return true;
+        }
+        // showInAppNotificationsがtrueの場合のみ表示
+        return n.showInAppNotifications === true;
+      });
       
       if (this.filterType === 'read') {
         filtered = filtered.filter(n => n.isRead);

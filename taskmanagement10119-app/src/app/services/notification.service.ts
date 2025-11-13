@@ -4,6 +4,7 @@ import {
   doc,
   addDoc,
   updateDoc,
+  getDoc,
   getDocs,
   query,
   where,
@@ -14,7 +15,7 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db } from '../../firebase-config';
-import { Notification, NotificationType, getNotificationCategory, getNotificationSettingKey } from '../models/notification.model';
+import { Notification, NotificationType, getNotificationCategory, getNotificationSettingKey, getWebPushCategoryKey, getWebPushSettingKey } from '../models/notification.model';
 import { AuthService } from './auth.service';
 
 @Injectable({
@@ -41,9 +42,14 @@ export class NotificationService {
         );
         const notificationSettings = targetUser.notificationSettings;
         
-        // カテゴリ設定がfalseの場合は通知を作成しない
-        if (!notificationSettings[category]) {
-          console.log(`[通知] ユーザー ${targetUserId} の ${category} カテゴリの通知は無効化されています`);
+        // お知らせ通知のカテゴリ設定とWebPush通知のカテゴリ設定をチェック
+        const categoryEnabled = notificationSettings[category] !== false;
+        const webPushCategoryKey = getWebPushCategoryKey(category);
+        const webPushCategoryEnabled = notificationSettings[webPushCategoryKey] !== false;
+        
+        // どちらか一方でも有効なら通知を作成する
+        if (!categoryEnabled && !webPushCategoryEnabled) {
+          console.log(`[通知] ユーザー ${targetUserId} の ${category} カテゴリの通知（お知らせ・WebPush両方）は無効化されています`);
           return null;
         }
         
@@ -52,40 +58,97 @@ export class NotificationService {
           notificationData.type as NotificationType,
           notificationData.checkType
         );
-        if (settingKey && notificationSettings[settingKey] === false) {
-          console.log(`[通知] ユーザー ${targetUserId} の ${settingKey} 個別設定の通知は無効化されています`);
+        const webPushSettingKey = getWebPushSettingKey(
+          notificationData.type as NotificationType,
+          notificationData.checkType
+        );
+        
+        // お知らせ通知の個別設定とWebPush通知の個別設定をチェック
+        const settingEnabled = settingKey ? (notificationSettings[settingKey] !== false) : true;
+        const webPushSettingEnabled = webPushSettingKey ? (notificationSettings[webPushSettingKey] !== false) : true;
+        
+        // どちらか一方でも有効なら通知を作成する
+        if (!settingEnabled && !webPushSettingEnabled) {
+          console.log(`[通知] ユーザー ${targetUserId} の ${settingKey || 'なし'} 個別設定の通知（お知らせ・WebPush両方）は無効化されています`);
           return null;
         }
-      }
+        
+        // お知らせ通知の設定がONかどうかを記録（お知らせ画面に表示するかどうか）
+        const showInAppNotifications = categoryEnabled && settingEnabled;
+        
+        const notification: Omit<Notification, 'id'> = {
+          userId: targetUserId,
+          type: notificationData.type || 'task_reminder' as any,
+          title: notificationData.title || '',
+          message: notificationData.message || '',
+          isRead: false,
+          createdAt: Timestamp.now(),
+          showInAppNotifications: showInAppNotifications
+        };
+        
+        // undefinedのフィールドは追加しない（Firestoreではundefinedを保存できない）
+        if (notificationData.taskId !== undefined) {
+          notification.taskId = notificationData.taskId;
+        }
+        if (notificationData.projectId !== undefined) {
+          notification.projectId = notificationData.projectId;
+        }
+        if (notificationData.teamId !== undefined) {
+          notification.teamId = notificationData.teamId;
+        }
+        if (notificationData.invitationId !== undefined) {
+          notification.invitationId = notificationData.invitationId;
+        }
+        if (notificationData.checkType !== undefined) {
+          notification.checkType = notificationData.checkType;
+        }
 
-      const notification: Omit<Notification, 'id'> = {
-        userId: targetUserId,
-        type: notificationData.type || 'task_reminder' as any,
-        title: notificationData.title || '',
-        message: notificationData.message || '',
-        isRead: false,
-        createdAt: Timestamp.now()
-      };
-      
-      // undefinedのフィールドは追加しない（Firestoreではundefinedを保存できない）
-      if (notificationData.taskId !== undefined) {
-        notification.taskId = notificationData.taskId;
-      }
-      if (notificationData.projectId !== undefined) {
-        notification.projectId = notificationData.projectId;
-      }
-      if (notificationData.teamId !== undefined) {
-        notification.teamId = notificationData.teamId;
-      }
-      if (notificationData.invitationId !== undefined) {
-        notification.invitationId = notificationData.invitationId;
-      }
-      if (notificationData.checkType !== undefined) {
-        notification.checkType = notificationData.checkType;
-      }
+        const docRef = await addDoc(collection(db, 'notifications'), notification);
+        
+        // 通知作成時にイベントを発火（未読件数を即時更新するため）
+        window.dispatchEvent(new CustomEvent('notificationCreated', {
+          detail: { userId: targetUserId }
+        }));
+        
+        return docRef.id;
+      } else {
+        // 通知設定がない場合、またはnotificationData.typeがない場合（後方互換性のため）
+        const notification: Omit<Notification, 'id'> = {
+          userId: targetUserId,
+          type: notificationData.type || 'task_reminder' as any,
+          title: notificationData.title || '',
+          message: notificationData.message || '',
+          isRead: false,
+          createdAt: Timestamp.now(),
+          showInAppNotifications: true // 設定がない場合は表示する（既存の動作を維持）
+        };
+        
+        // undefinedのフィールドは追加しない（Firestoreではundefinedを保存できない）
+        if (notificationData.taskId !== undefined) {
+          notification.taskId = notificationData.taskId;
+        }
+        if (notificationData.projectId !== undefined) {
+          notification.projectId = notificationData.projectId;
+        }
+        if (notificationData.teamId !== undefined) {
+          notification.teamId = notificationData.teamId;
+        }
+        if (notificationData.invitationId !== undefined) {
+          notification.invitationId = notificationData.invitationId;
+        }
+        if (notificationData.checkType !== undefined) {
+          notification.checkType = notificationData.checkType;
+        }
 
-      const docRef = await addDoc(collection(db, 'notifications'), notification);
-      return docRef.id;
+        const docRef = await addDoc(collection(db, 'notifications'), notification);
+        
+        // 通知作成時にイベントを発火（未読件数を即時更新するため）
+        window.dispatchEvent(new CustomEvent('notificationCreated', {
+          detail: { userId: targetUserId }
+        }));
+        
+        return docRef.id;
+      }
     } catch (error: any) {
       console.error('Error creating notification:', error);
       console.error('Error details:', error.message);
@@ -163,11 +226,26 @@ export class NotificationService {
 
   async markAsRead(notificationId: string): Promise<void> {
     try {
+      // 通知情報を取得してuserIdを取得
       const notificationRef = doc(db, 'notifications', notificationId);
+      const notificationSnap = await getDoc(notificationRef);
+      
+      if (!notificationSnap.exists()) {
+        throw new Error('Notification not found');
+      }
+      
+      const notificationData = notificationSnap.data();
+      const userId = notificationData['userId'];
+      
       await updateDoc(notificationRef, {
         isRead: true,
         readAt: Timestamp.now()
       });
+      
+      // 既読時にイベントを発火（未読件数を即時更新するため）
+      window.dispatchEvent(new CustomEvent('notificationRead', {
+        detail: { userId: userId }
+      }));
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -176,7 +254,25 @@ export class NotificationService {
   async getUnreadCount(userId: string, userTeamIds: string[] = []): Promise<number> {
     try {
       const notifications = await this.getNotifications(userId, userTeamIds);
-      return notifications.filter(n => !n.isRead).length;
+      
+      // 未読通知をフィルタリング
+      // フラグがない通知（既存の通知）は全てカウント（後方互換性）
+      // フラグがある通知は、showInAppNotificationsがtrueの場合のみカウント
+      const unreadNotifications = notifications.filter(n => {
+        // 既読の場合は除外
+        if (n.isRead) {
+          return false;
+        }
+        
+        // showInAppNotificationsフィールドがない場合（既存の通知）は全てカウント
+        if (n.showInAppNotifications === undefined) {
+          return true;
+        }
+        // showInAppNotificationsがtrueの場合のみカウント
+        return n.showInAppNotifications === true;
+      });
+      
+      return unreadNotifications.length;
     } catch (error) {
       return 0;
     }
@@ -221,6 +317,20 @@ export class NotificationService {
   // 複数の通知を一括既読にする
   async markAllAsRead(notificationIds: string[]): Promise<void> {
     try {
+      if (notificationIds.length === 0) {
+        return;
+      }
+      
+      // 最初の通知からuserIdを取得
+      const firstNotificationRef = doc(db, 'notifications', notificationIds[0]);
+      const firstNotificationSnap = await getDoc(firstNotificationRef);
+      let userId: string | null = null;
+      
+      if (firstNotificationSnap.exists()) {
+        const notificationData = firstNotificationSnap.data();
+        userId = notificationData['userId'] || null;
+      }
+      
       const batch = writeBatch(db);
       const now = Timestamp.now();
       
@@ -233,6 +343,13 @@ export class NotificationService {
       }
       
       await batch.commit();
+      
+      // 一括既読時にイベントを発火（未読件数を即時更新するため）
+      if (userId) {
+        window.dispatchEvent(new CustomEvent('notificationRead', {
+          detail: { userId: userId }
+        }));
+      }
     } catch (error: any) {
       throw new Error(error.message);
     }
