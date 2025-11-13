@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Location } from '@angular/common';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, collection, query, where, getDocs, doc, deleteDoc } from 'firebase/firestore';
+import { db } from '../../../firebase-config';
 import { AuthService } from '../../services/auth.service';
 import { TaskService } from '../../services/task.service';
 import { ProjectService } from '../../services/project.service';
@@ -509,9 +510,6 @@ export class ArchiveComponent implements OnInit {
     userTeamIds: string[] = []
   ): Promise<Project[]> {
     try {
-      const { collection, query, where, getDocs } = await import('firebase/firestore');
-      const { db } = await import('../../../firebase-config');
-      
       // 全プロジェクトを取得
       const q = query(collection(db, 'projects'));
       const snapshot = await getDocs(q);
@@ -809,9 +807,6 @@ export class ArchiveComponent implements OnInit {
         return;
       }
 
-      const { doc, deleteDoc } = await import('firebase/firestore');
-      const { db } = await import('../../../firebase-config');
-
       const itemIds = Array.from(this.selectedItems);
       let successCount = 0;
       let failCount = 0;
@@ -909,9 +904,6 @@ export class ArchiveComponent implements OnInit {
         // projectIdが削除されている場合、削除されたプロジェクトを探す
         // 全プロジェクト（削除されたものも含む）を取得してoriginalTaskIdsを確認
         try {
-          const { collection, query, getDocs } = await import('firebase/firestore');
-          const { db } = await import('../../../firebase-config');
-          
           const q = query(collection(db, 'projects'));
           const snapshot = await getDocs(q);
           const allProjects = snapshot.docs.map(doc => ({
@@ -1164,12 +1156,8 @@ export class ArchiveComponent implements OnInit {
       }
 
       if (item.type === 'task') {
-        const { doc, deleteDoc } = await import('firebase/firestore');
-        const { db } = await import('../../../firebase-config');
         await deleteDoc(doc(db, 'tasks', item.id));
       } else {
-        const { doc, deleteDoc } = await import('firebase/firestore');
-        const { db } = await import('../../../firebase-config');
         await deleteDoc(doc(db, 'projects', item.id));
       }
       
