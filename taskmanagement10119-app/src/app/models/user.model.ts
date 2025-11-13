@@ -33,6 +33,9 @@ export interface NotificationPreferences {
   projectDeleted?: boolean;   // プロジェクト削除
   projectRestored?: boolean;  // プロジェクト復元
   projectCompleted?: boolean; // プロジェクト完了
+  projectMemberAdded?: boolean; // プロジェクトメンバー追加
+  projectMemberRemoved?: boolean; // プロジェクトメンバー削除
+  projectMemberRoleChanged?: boolean; // プロジェクトメンバー権限変更
   
   // リマインダーの個別設定
   taskOverdue?: boolean;      // 担当タスク（期限切れ）
@@ -68,6 +71,9 @@ export interface NotificationPreferences {
       projectDeletedWebPush?: boolean;   // プロジェクト削除のWebPush
       projectRestoredWebPush?: boolean;    // プロジェクト復元のWebPush
       projectCompletedWebPush?: boolean;  // プロジェクト完了のWebPush
+      projectMemberAddedWebPush?: boolean; // プロジェクトメンバー追加のWebPush
+      projectMemberRemovedWebPush?: boolean; // プロジェクトメンバー削除のWebPush
+      projectMemberRoleChangedWebPush?: boolean; // プロジェクトメンバー権限変更のWebPush
   taskOverdueWebPush?: boolean;      // タスク期限切れのWebPush
   taskReminderWebPush?: boolean;     // タスクリマインダーのWebPush
   startDateOverdueWebPush?: boolean; // 開始日過ぎのWebPush

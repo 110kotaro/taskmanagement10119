@@ -29,5 +29,7 @@ module.exports = {
     "quotes": ["error", "double"],
     "import/no-unresolved": 0,
     "indent": ["error", 2],
+    "linebreak-style": "off", // Windows環境ではCRLFが標準のため無効化
+    "max-len": ["error", {"code": 120}], // 80文字から120文字に緩和
   },
 };

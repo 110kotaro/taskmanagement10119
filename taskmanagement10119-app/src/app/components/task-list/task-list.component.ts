@@ -2,6 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import{CommonModule} from '@angular/common';
 import{FormsModule} from '@angular/forms';
 import{Router} from '@angular/router';
+import { Location } from '@angular/common';
 import{TaskService} from '../../services/task.service';
 import{TeamService} from '../../services/team.service';
 import{AuthService} from '../../services/auth.service';
@@ -20,10 +21,16 @@ export class TaskListComponent implements OnInit {
   teamService = inject(TeamService);
   authService = inject(AuthService);
   router = inject(Router);
+  location = inject(Location);
 
   tasks: Task[] = [];
   filteredTasks: Task[] = [];
   isLoading = true;
+  
+  // 未完了タスクの有無を判定するプロパティ
+  get hasIncompleteTasks(): boolean {
+    return this.tasks.some(task => task.status !== 'completed');
+  }
   
   // 個人/チーム切り替え
   taskViewMode: 'personal' | 'team' = 'personal';
@@ -34,16 +41,17 @@ export class TaskListComponent implements OnInit {
   // 表示モード設定
   viewMode: 'card' | 'table' = 'table'; // デフォルトはテーブル表示
   
-  // フィルター設定
-  statusFilter: 'all' | 'not_started' | 'in_progress' | 'completed' | 'overdue' = 'all';
-  priorityFilter: 'all' | 'important' | 'normal' | 'low' | 'none' | 'custom' = 'all';
-  taskTypeFilter: 'all' | 'normal' | 'meeting' | 'regular' | 'project' | 'other' = 'all';
+  // フィルター設定（複数選択対応）
+  statusFilters: Set<string> = new Set();
+  priorityFilters: Set<string> = new Set();
+  taskTypeFilters: Set<string> = new Set();
+  overdueFilter: boolean = true; // 期限切れフィルター（独立）
   
   // 選択されたタスク（一括削除用）
   selectedTasks: Set<string> = new Set();
   
   // ソート設定
-  sortBy: 'endDate' | 'createdAt' | 'priority' | 'title' | 'completedAt' = 'endDate';
+  sortBy: 'endDate' | 'priority' | 'title' | 'completedAt' | 'startDate' = 'endDate';
   sortOrder: 'asc' | 'desc' = 'asc';
   
   // ステータス別グループ
@@ -63,6 +71,14 @@ export class TaskListComponent implements OnInit {
     // タスク一覧の表示モードをlocalStorageから取得
     this.loadTaskListViewModeFromStorage();
     
+    // 現在のビューモードに対応するフィルターを復元
+    this.loadFiltersFromStorage();
+    
+    // フィルターが保存されていない場合のみデフォルト値を設定
+    if (!this.hasFiltersInStorage()) {
+      this.initializeDefaultFilters();
+    }
+    
     // 個人/チーム切り替えの変更を監視
     window.addEventListener('viewModeChanged', (event: any) => {
       if (event.detail) {
@@ -70,10 +86,27 @@ export class TaskListComponent implements OnInit {
         this.selectedTeamId = event.detail.selectedTeamId;
         this.userTeamIds = event.detail.userTeamIds || this.userTeamIds;
       }
+      // ビューモード変更時はフィルターを初期化
+      this.initializeDefaultFilters();
       this.loadTasks();
     });
     
     await this.loadTasks();
+  }
+
+  // フィルターのデフォルト値を設定（全て選択状態）
+  initializeDefaultFilters() {
+    // ステータスフィルター: 未着手、進行中
+    this.statusFilters = new Set(['not_started', 'in_progress']);
+    
+    // 期限切れフィルター: デフォルトで有効
+    this.overdueFilter = true;
+    
+    // 優先度フィルター: 重要、普通、低め、なし
+    this.priorityFilters = new Set(['important', 'normal', 'low', 'none']);
+    
+    // タスクタイプフィルター: 通常、会議、定期、プロジェクト、その他
+    this.taskTypeFilters = new Set(['normal', 'meeting', 'regular', 'project', 'other']);
   }
 
   loadViewModeStateFromStorage() {
@@ -103,6 +136,51 @@ export class TaskListComponent implements OnInit {
     } catch (error) {
       console.error('Error loading task list view mode from storage:', error);
     }
+  }
+
+  // 現在のビューモードに対応するキーを取得
+  private getFiltersStorageKey(): string {
+    return `taskListFilters_${this.taskViewMode}`;
+  }
+
+  // フィルター状態をlocalStorageに保存
+  saveFiltersToStorage() {
+    try {
+      const filters = {
+        statusFilters: Array.from(this.statusFilters),
+        priorityFilters: Array.from(this.priorityFilters),
+        taskTypeFilters: Array.from(this.taskTypeFilters),
+        overdueFilter: this.overdueFilter,
+        sortBy: this.sortBy,
+        sortOrder: this.sortOrder
+      };
+      localStorage.setItem(this.getFiltersStorageKey(), JSON.stringify(filters));
+    } catch (error) {
+      console.error('Error saving filters to storage:', error);
+    }
+  }
+
+  // localStorageからフィルター状態を復元
+  loadFiltersFromStorage() {
+    try {
+      const saved = localStorage.getItem(this.getFiltersStorageKey());
+      if (saved) {
+        const filters = JSON.parse(saved);
+        this.statusFilters = new Set(filters.statusFilters || []);
+        this.priorityFilters = new Set(filters.priorityFilters || []);
+        this.taskTypeFilters = new Set(filters.taskTypeFilters || []);
+        this.overdueFilter = filters.overdueFilter !== undefined ? filters.overdueFilter : true;
+        this.sortBy = filters.sortBy || 'endDate';
+        this.sortOrder = filters.sortOrder || 'asc';
+      }
+    } catch (error) {
+      console.error('Error loading filters from storage:', error);
+    }
+  }
+
+  // フィルターが保存されているかチェック
+  hasFiltersInStorage(): boolean {
+    return localStorage.getItem(this.getFiltersStorageKey()) !== null;
   }
 
   async loadUserTeams() {
@@ -175,30 +253,58 @@ export class TaskListComponent implements OnInit {
     // 完了済みタスクを除外
     filtered = filtered.filter(task => task.status !== 'completed');
 
-    // ステータスフィルター
-    if (this.statusFilter !== 'all') {
+    // ステータスフィルター（複数選択対応）
+    // フィルターが空の場合は何も表示しない
+    if (this.statusFilters.size === 0) {
+      this.filteredTasks = [];
+      return;
+    }
+    
+    if (this.statusFilters.size > 0) {
+      filtered = filtered.filter(task => {
+        // 通常のステータスチェック
+        return this.statusFilters.has(task.status);
+      });
+    }
+
+    // 期限切れフィルター（独立）
+    if (!this.overdueFilter) {
+      // 期限切れフィルターが無効な場合、期限切れタスクを除外
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
-      if (this.statusFilter === 'overdue') {
-        filtered = filtered.filter(task => {
-          const endDate = task.endDate.toDate();
-          const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-          return endDateOnly < today && task.status !== 'completed';
-        });
-      } else {
-        filtered = filtered.filter(task => task.status === this.statusFilter);
-      }
+      filtered = filtered.filter(task => {
+        const endDate = task.endDate.toDate();
+        const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+        // 期限切れでないタスクのみ残す
+        return endDateOnly >= today || task.status === 'completed';
+      });
     }
 
-    // 優先度フィルター
-    if (this.priorityFilter !== 'all') {
-      filtered = filtered.filter(task => task.priority === this.priorityFilter);
+    // 優先度フィルター（複数選択対応）
+    // フィルターが空の場合は何も表示しない
+    if (this.priorityFilters.size === 0) {
+      this.filteredTasks = [];
+      return;
+    }
+    
+    if (this.priorityFilters.size > 0) {
+      filtered = filtered.filter(task => this.priorityFilters.has(task.priority));
     }
 
-    // タスクタイプフィルター
-    if (this.taskTypeFilter !== 'all') {
-      filtered = filtered.filter(task => task.taskType === this.taskTypeFilter);
+    // タスクタイプフィルター（複数選択対応）
+    // フィルターが空の場合は何も表示しない
+    if (this.taskTypeFilters.size === 0) {
+      this.filteredTasks = [];
+      return;
+    }
+    
+    if (this.taskTypeFilters.size > 0) {
+      filtered = filtered.filter(task => {
+        // taskTypeがundefinedの場合は'normal'として扱う
+        const taskType = task.taskType || 'normal';
+        return this.taskTypeFilters.has(taskType);
+      });
     }
 
     // ソート
@@ -209,8 +315,8 @@ export class TaskListComponent implements OnInit {
         case 'endDate':
           comparison = a.endDate.toMillis() - b.endDate.toMillis();
           break;
-        case 'createdAt':
-          comparison = a.createdAt.toMillis() - b.createdAt.toMillis();
+        case 'startDate':
+          comparison = a.startDate.toMillis() - b.startDate.toMillis();
           break;
         case 'priority':
           const priorityOrder = ['important', 'normal', 'low', 'none', 'custom'];
@@ -305,6 +411,19 @@ export class TaskListComponent implements OnInit {
     return startDateOnly < today;
   }
 
+  // 終了日を過ぎているタスクかどうか判定（未完了）
+  isOverdueEndDate(task: Task): boolean {
+    if (task.status === 'completed') return false;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const endDate = task.endDate.toDate();
+    const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    
+    return endDateOnly < today;
+  }
+
   viewTaskDetail(taskId:string){
     this.router.navigate(['/task',taskId], { queryParams: { from: 'task-list' } });
   }
@@ -340,31 +459,73 @@ export class TaskListComponent implements OnInit {
   }
 
   goBack(){
-    this.router.navigate(['/home']);
+    if (window.history.length > 1) {
+      this.location.back();
+    } else {
+      this.router.navigate(['/home']);
+    }
   }
 
   openCreateTaskModal() {
-    // タスク作成ページに遷移
-    this.router.navigate(['/task/create'],{ queryParams: { from: 'task-list' } });
+    // タスク作成ページに遷移（個人/チームモードを渡す）
+    const queryParams: any = { from: 'task-list' };
+    if (this.taskViewMode === 'team' && this.selectedTeamId) {
+      queryParams['teamId'] = this.selectedTeamId;
+      queryParams['viewMode'] = 'team';
+    } else {
+      queryParams['viewMode'] = 'personal';
+    }
+    this.router.navigate(['/task/create'], { queryParams });
   }
 
-  // フィルター変更
-  onStatusFilterChange(status: 'all' | 'not_started' | 'in_progress' | 'completed' | 'overdue') {
-    this.statusFilter = status;
-    this.selectedTasks.clear(); // フィルター変更時に選択をクリア
+  // フィルター変更（複数選択対応）
+  onStatusFilterChange(status: string, checked: boolean) {
+    if (checked) {
+      this.statusFilters.add(status);
+    } else {
+      this.statusFilters.delete(status);
+    }
+    this.selectedTasks.clear();
+    this.saveFiltersToStorage();
     this.applyFiltersAndSort();
     this.groupTasksByStatus();
   }
 
-  onPriorityFilterChange(priority: 'all' | 'important' | 'normal' | 'low' | 'none' | 'custom') {
-    this.priorityFilter = priority;
-    this.selectedTasks.clear(); // フィルター変更時に選択をクリア
+  onPriorityFilterChange(priority: string, checked: boolean) {
+    if (checked) {
+      this.priorityFilters.add(priority);
+    } else {
+      this.priorityFilters.delete(priority);
+    }
+    this.selectedTasks.clear();
+    this.saveFiltersToStorage();
+    this.applyFiltersAndSort();
+    this.groupTasksByStatus();
+  }
+
+  onTaskTypeFilterChange(taskType: string, checked: boolean) {
+    if (checked) {
+      this.taskTypeFilters.add(taskType);
+    } else {
+      this.taskTypeFilters.delete(taskType);
+    }
+    this.selectedTasks.clear();
+    this.saveFiltersToStorage();
+    this.applyFiltersAndSort();
+    this.groupTasksByStatus();
+  }
+
+  // 期限切れフィルター変更
+  onOverdueFilterChange(checked: boolean) {
+    this.overdueFilter = checked;
+    this.selectedTasks.clear();
+    this.saveFiltersToStorage();
     this.applyFiltersAndSort();
     this.groupTasksByStatus();
   }
 
   // ソート変更
-  onSortChange(newSortBy: 'endDate' | 'createdAt' | 'priority' | 'title' | 'completedAt') {
+  onSortChange(newSortBy: 'endDate' | 'priority' | 'title' | 'completedAt' | 'startDate') {
     // 変更前の値を保持
     const oldSortBy = this.sortBy;
     
@@ -378,6 +539,7 @@ export class TaskListComponent implements OnInit {
       this.sortOrder = 'asc';
     }
     
+    this.saveFiltersToStorage();
     this.applyFiltersAndSort();
     this.groupTasksByStatus();
   }
@@ -385,6 +547,7 @@ export class TaskListComponent implements OnInit {
   // 昇順/降順を切り替えるメソッド
   toggleSortOrder() {
     this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+    this.saveFiltersToStorage();
     this.applyFiltersAndSort();
     this.groupTasksByStatus();
   }
@@ -412,7 +575,9 @@ export class TaskListComponent implements OnInit {
 
   formatWorkTime(seconds: number): string {
     if (!seconds || seconds === 0) return '0分';
-    const minutes = Math.ceil(seconds / 60);
+    // 秒を分に変換（29秒以下は切り捨て、30秒以上は切り上げ）
+    const remainder = seconds % 60;
+    const minutes = Math.floor(seconds / 60) + (remainder >= 30 ? 1 : 0);
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     if (hours > 0) {
@@ -425,14 +590,6 @@ export class TaskListComponent implements OnInit {
     return task.assigneeName || '未設定';
   }
 
-  // タスクタイプフィルター変更
-  onTaskTypeFilterChange(taskType: 'all' | 'normal' | 'meeting' | 'regular' | 'project' | 'other') {
-    this.taskTypeFilter = taskType;
-    this.applyFiltersAndSort();
-    this.groupTasksByStatus();
-    // フィルター変更時に選択をクリア
-    this.selectedTasks.clear();
-  }
 
   // タスクタイプラベルの取得
   getTaskTypeLabel(taskType: string): string {
@@ -477,13 +634,101 @@ export class TaskListComponent implements OnInit {
     }
     
     try {
-      const taskIds = Array.from(this.selectedTasks);
-      for (const taskId of taskIds) {
-        await this.taskService.deleteTask(taskId);
+      const user = this.authService.currentUser;
+      if (!user) {
+        alert('ログインが必要です');
+        return;
       }
+      
+      const taskIds = Array.from(this.selectedTasks);
+      let successCount = 0;
+      let failCount = 0;
+      
+      // 各タスクの情報を取得して分類
+      const tasks = await Promise.all(
+        taskIds.map(id => this.taskService.getTask(id))
+      );
+      
+      // 親タスクと子タスクに分類
+      const childTasks: string[] = [];
+      const parentTasks: string[] = [];
+      const otherTasks: string[] = [];
+      
+      tasks.forEach((task, index) => {
+        if (!task) {
+          // タスクが見つからない場合はスキップ
+          return;
+        }
+        
+        if (task.parentTaskId) {
+          // 子タスク（parentTaskIdが設定されている）
+          childTasks.push(taskIds[index]);
+        } else if (task.isRecurrenceParent) {
+          // 親タスク（isRecurrenceParent === true）
+          parentTasks.push(taskIds[index]);
+        } else {
+          // その他のタスク
+          otherTasks.push(taskIds[index]);
+        }
+      });
+      
+      // 子タスクを先に処理（権限チェック付き）
+      for (const taskId of childTasks) {
+        const task = tasks.find(t => t?.id === taskId);
+        if (!task) {
+          failCount++;
+          continue;
+        }
+        
+        // 権限チェック
+        const canDelete = await this.taskService.canDeleteTask(task, user.uid);
+        if (!canDelete) {
+          failCount++;
+          continue;
+        }
+        
+        try {
+          await this.taskService.deleteTask(taskId);
+          successCount++;
+        } catch (error) {
+          console.error(`Error deleting task ${taskId}:`, error);
+          failCount++;
+        }
+      }
+      
+      // その後、親タスクとその他のタスクを処理（権限チェック付き）
+      for (const taskId of [...parentTasks, ...otherTasks]) {
+        const task = tasks.find(t => t?.id === taskId);
+        if (!task) {
+          failCount++;
+          continue;
+        }
+        
+        // 権限チェック
+        const canDelete = await this.taskService.canDeleteTask(task, user.uid);
+        if (!canDelete) {
+          failCount++;
+          continue;
+        }
+        
+        try {
+          await this.taskService.deleteTask(taskId);
+          successCount++;
+        } catch (error) {
+          console.error(`Error deleting task ${taskId}:`, error);
+          failCount++;
+        }
+      }
+      
       this.selectedTasks.clear();
       await this.loadTasks();
-      alert('タスクを削除しました');
+      
+      // エラーメッセージの表示
+      if (failCount > 0) {
+        alert(`${successCount}件を削除しました。${failCount}件は権限不足のため削除できませんでした。`);
+      } else {
+        alert(`${successCount}件を削除しました`);
+      }
     } catch (error) {
       console.error('タスクの削除に失敗しました:', error);
       alert('タスクの削除に失敗しました');

@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, Injector } from '@angular/core';
 import {
   collection,
   doc,
@@ -19,6 +19,8 @@ import { TeamInvitation } from '../models/team-invitation.model';
 import { AuthService } from './auth.service';
 import { NotificationService } from './notification.service';
 import { NotificationType } from '../models/notification.model';
+import { Project } from '../models/project.model';
+import { ProjectService } from './project.service';
 
 @Injectable({
   providedIn: 'root'
@@ -26,6 +28,7 @@ import { NotificationType } from '../models/notification.model';
 export class TeamService {
   private authService = inject(AuthService);
   private notificationService = inject(NotificationService);
+  private injector = inject(Injector); // 遅延注入用
 
   async createTeam(teamData: Partial<Team>): Promise<string> {
     try {
@@ -309,9 +312,66 @@ export class TeamService {
         return this.leaveTeam(teamId);
       }
 
+      // 削除されるメンバーの情報を取得（通知で使用するため）
+      const deletedMember = team.members.find(m => m.userId === memberUserId);
+
       // メンバーを削除
       const updatedMembers = team.members.filter(m => m.userId !== memberUserId);
       await this.updateTeam(teamId, { members: updatedMembers });
+
+      // チーム配下の全プロジェクトを処理
+      const projectsQuery = query(
+        collection(db, 'projects'),
+        where('teamId', '==', teamId),
+        where('isDeleted', '==', false)
+      );
+      const projectsSnapshot = await getDocs(projectsQuery);
+
+      // 各プロジェクトを処理
+      for (const projectDoc of projectsSnapshot.docs) {
+        const project = { id: projectDoc.id, ...projectDoc.data() } as Project;
+        
+        // プロジェクトメンバーから削除
+        const updatedProjectMembers = (project.members || []).filter(m => m.userId !== memberUserId);
+        
+        const projectUpdates: any = {};
+        
+        // メンバーリストを更新（変更がある場合のみ）
+        if (updatedProjectMembers.length !== (project.members || []).length) {
+          projectUpdates.members = updatedProjectMembers;
+        }
+        
+        // プロジェクトの担当者が削除されるユーザーの場合、未割当にする
+        // updateProjectのcleanUpdatesがundefinedをdeleteField()に変換してくれる
+        if (project.assigneeId === memberUserId) {
+          projectUpdates.assigneeId = undefined;
+          projectUpdates.assigneeName = undefined;
+        }
+        
+        // プロジェクトを更新（変更がある場合のみ）
+        if (Object.keys(projectUpdates).length > 0) {
+          // ProjectServiceを遅延注入で取得（循環依存を回避）
+          const projectService = this.injector.get(ProjectService);
+          await projectService.updateProject(project.id, projectUpdates, true); // skipAutoComment = true
+        }
+        
+        // プロジェクトのタスクで削除されるユーザーが担当者の場合、未割当にする
+        const tasksQuery = query(
+          collection(db, 'tasks'),
+          where('projectId', '==', project.id),
+          where('assigneeId', '==', memberUserId),
+          where('isDeleted', '==', false)
+        );
+        const tasksSnapshot = await getDocs(tasksQuery);
+        
+        for (const taskDoc of tasksSnapshot.docs) {
+          // 直接updateDocを使う場合はdeleteField()を使う必要がある
+          await updateDoc(doc(db, 'tasks', taskDoc.id), {
+            assigneeId: deleteField(),
+            assigneeName: deleteField()
+          });
+        }
+      }
 
       // 退会通知を送信（削除されたメンバーに）
       await this.notificationService.createNotification({
@@ -319,8 +379,27 @@ export class TeamService {
         type: NotificationType.TeamLeave,
         title: 'チームから削除されました',
         message: `${user.displayName || user.email}がチーム「${team.name}」からあなたを削除しました`,
-        teamId: teamId
+        // 個人向けなのでteamIdは設定しない
       });
+      // チーム全員に誰かが削除されたことを通知（削除されたメンバーと削除した人を除く）
+      const currentUserId = user.uid; // 削除した人のIDを変数に保存
+      
+      for (const member of team.members) {
+        // 削除されたメンバーと削除した人を除く
+        if (member.userId === memberUserId || member.userId === currentUserId) {
+          continue;
+        }
+
+        // チーム向けの通知
+        await this.notificationService.createNotification({
+          userId: member.userId,
+          type: NotificationType.TeamLeave,
+          title: 'チームメンバーが削除されました',
+          message: `${user.displayName || user.email}がチーム「${team.name}」から${deletedMember?.userName || 'メンバー'}を削除しました`,
+          teamId: teamId
+        });
+      }
+
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -358,6 +437,7 @@ export class TeamService {
         'viewer': '閲覧者'
       };
 
+      // 権限変更されたメンバーへの通知
       await this.notificationService.createNotification({
         userId: memberUserId,
         type: NotificationType.TeamPermissionChange,
@@ -365,6 +445,26 @@ export class TeamService {
         message: `${user.displayName || user.email}がチーム「${team.name}」でのあなたの権限を${roleNames[newRole]}に変更しました`,
         teamId: teamId
       });
+      
+      // 操作者以外のチームメンバーに通知
+      const operatorUserId = user.uid; // 操作者
+      const changedMember = team.members.find(m => m.userId === memberUserId);
+      
+      for (const member of team.members) {
+        // 操作者と権限変更されたメンバーを除く
+        if (member.userId === operatorUserId || member.userId === memberUserId) {
+          continue;
+        }
+        
+        // チーム向けの通知
+        await this.notificationService.createNotification({
+          userId: member.userId,
+          type: NotificationType.TeamPermissionChange,
+          title: 'チームメンバーの権限が変更されました',
+          message: `${user.displayName || user.email}が${changedMember?.userName || 'メンバー'}のチーム「${team.name}」での権限を${roleNames[newRole]}に変更しました`,
+          teamId: teamId
+        });
+      }
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -387,14 +487,75 @@ export class TeamService {
       const updatedMembers = team.members.filter(m => m.userId !== user.uid);
       await this.updateTeam(teamId, { members: updatedMembers });
 
-      // 退会通知を送信（オーナーに）
-      await this.notificationService.createNotification({
-        userId: team.ownerId,
-        type: NotificationType.TeamLeave,
-        title: 'チームメンバーが退会しました',
-        message: `${user.displayName || user.email}がチーム「${team.name}」を退会しました`,
-        teamId: teamId
-      });
+      // チーム配下の全プロジェクトを処理
+      const leavingUserId = user.uid; // 退会する人
+      const projectsQuery = query(
+        collection(db, 'projects'),
+        where('teamId', '==', teamId),
+        where('isDeleted', '==', false)
+      );
+      const projectsSnapshot = await getDocs(projectsQuery);
+
+      // 各プロジェクトを処理
+      for (const projectDoc of projectsSnapshot.docs) {
+        const project = { id: projectDoc.id, ...projectDoc.data() } as Project;
+        
+        // プロジェクトメンバーから削除
+        const updatedProjectMembers = (project.members || []).filter(m => m.userId !== leavingUserId);
+        
+        const projectUpdates: any = {};
+        
+        // メンバーリストを更新（変更がある場合のみ）
+        if (updatedProjectMembers.length !== (project.members || []).length) {
+          projectUpdates.members = updatedProjectMembers;
+        }
+        
+        // プロジェクトの担当者が退会者の場合、未割当にする
+        if (project.assigneeId === leavingUserId) {
+          projectUpdates.assigneeId = undefined;
+          projectUpdates.assigneeName = undefined;
+        }
+        
+        // プロジェクトを更新（変更がある場合のみ）
+        if (Object.keys(projectUpdates).length > 0) {
+          const projectService = this.injector.get(ProjectService);
+          await projectService.updateProject(project.id, projectUpdates, true); // skipAutoComment = true
+        }
+        
+        // プロジェクトのタスクで退会者が担当者の場合、未割当にする
+        const tasksQuery = query(
+          collection(db, 'tasks'),
+          where('projectId', '==', project.id),
+          where('assigneeId', '==', leavingUserId),
+          where('isDeleted', '==', false)
+        );
+        const tasksSnapshot = await getDocs(tasksQuery);
+        
+        for (const taskDoc of tasksSnapshot.docs) {
+          await updateDoc(doc(db, 'tasks', taskDoc.id), {
+            assigneeId: deleteField(),
+            assigneeName: deleteField()
+          });
+        }
+      }
+
+      // 退会者を除くチームメンバー全員に通知
+      
+      for (const member of team.members) {
+        // 退会者を除く
+        if (member.userId === leavingUserId) {
+          continue;
+        }
+        
+        // チーム向けの通知
+        await this.notificationService.createNotification({
+          userId: member.userId,
+          type: NotificationType.TeamLeave,
+          title: 'チームメンバーが退会しました',
+          message: `${user.displayName || user.email}がチーム「${team.name}」を退会しました`,
+          teamId: teamId
+        });
+      }
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -448,7 +609,7 @@ export class TeamService {
     return this.canEditTeam(teamId, userId);
   }
 
-  // チームの招待一覧を取得（pending状態のみ）
+  // チームの招待一覧を取得（pending状態のみ、メール招待のみ）
   async getPendingInvitations(teamId: string): Promise<TeamInvitation[]> {
     try {
       const q = query(
@@ -471,6 +632,11 @@ export class TeamService {
           continue;
         }
 
+        // リンク招待は除外（メール招待のみを返す）
+        if (data['invitationType'] === 'link') {
+          continue;
+        }
+
         invitations.push({ id: doc.id, ...data } as TeamInvitation);
       }
 
@@ -483,14 +649,37 @@ export class TeamService {
   // 招待トークンから招待情報を取得
   async getInvitationByToken(token: string): Promise<TeamInvitation | null> {
     try {
-      const q = query(
+      // まず、status: 'pending'で取得を試みる
+      let q = query(
         collection(db, 'teamInvitations'),
         where('invitationToken', '==', token),
         where('status', '==', 'pending'),
         limit(1)
       );
 
-      const snapshot = await getDocs(q);
+      let snapshot = await getDocs(q);
+      
+      // 見つからない場合、リンク招待の可能性があるので、status: 'accepted'でも取得を試みる
+      if (snapshot.empty) {
+        q = query(
+          collection(db, 'teamInvitations'),
+          where('invitationToken', '==', token),
+          where('status', '==', 'accepted'),
+          limit(1)
+        );
+        snapshot = await getDocs(q);
+        
+        // 見つかった場合、リンク招待かどうかを確認
+        if (!snapshot.empty) {
+          const doc = snapshot.docs[0];
+          const data = doc.data();
+          // リンク招待の場合のみ、acceptedでも有効とする
+          if (data['invitationType'] !== 'link') {
+            return null;
+          }
+        }
+      }
+      
       if (snapshot.empty) return null;
 
       const doc = snapshot.docs[0];
@@ -573,6 +762,26 @@ export class TeamService {
         message: `${user.displayName || user.email}がチーム「${team.name}」への招待を承認しました`,
         teamId: invitation.teamId
       });
+      
+      // チーム全員に通知（招待者と承認者を除く）
+      const joinedUserId = user.uid; // 承認者（参加した人）
+      const inviterUserId = invitation.invitedBy; // 招待者
+      
+      for (const member of team.members) {
+        // 招待者と承認者を除く
+        if (member.userId === inviterUserId || member.userId === joinedUserId) {
+          continue;
+        }
+        
+        // チーム向けの通知
+        await this.notificationService.createNotification({
+          userId: member.userId,
+          type: NotificationType.TeamInvitationAccepted,
+          title: 'チームメンバーが参加しました',
+          message: `${user.displayName || user.email}がチーム「${team.name}」に参加しました`,
+          teamId: invitation.teamId
+        });
+      }
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -621,7 +830,7 @@ export class TeamService {
   }
 
   // リンク招待で参加する
-  async joinTeamByLink(token: string, userEmail: string, password: string): Promise<void> {
+  async joinTeamByLink(token: string, userEmail: string, password: string): Promise<{ alreadyMember: boolean; teamId: string }> {
     try {
       // まずログイン
       await this.authService.signIn(userEmail, password);
@@ -643,11 +852,8 @@ export class TeamService {
 
       // 既にメンバーかチェック
       if (team.members.some(m => m.userId === user.uid)) {
-        await updateDoc(doc(db, 'teamInvitations', invitation.id), {
-          status: 'accepted',
-          acceptedAt: Timestamp.now()
-        });
-        throw new Error('既にチームメンバーです');
+        // リンク招待の場合は、statusを更新せず、既にメンバーであることを示す戻り値を返す
+        return { alreadyMember: true, teamId: invitation.teamId };
       }
 
       // メンバーを追加
@@ -663,11 +869,8 @@ export class TeamService {
       const updatedMembers = [...team.members, newMember];
       await this.updateTeam(invitation.teamId, { members: updatedMembers });
 
-      // 招待を更新
-      await updateDoc(doc(db, 'teamInvitations', invitation.id), {
-        status: 'accepted',
-        acceptedAt: Timestamp.now()
-      });
+      // リンク招待の場合は、statusを更新しない（複数回使用可能にする）
+      // メール招待の場合は、statusを'accepted'に更新するが、リンク招待では更新しない
 
       // 招待者に通知
       await this.notificationService.createNotification({
@@ -677,6 +880,28 @@ export class TeamService {
         message: `${user.displayName || user.email}がチーム「${team.name}」への招待リンクから参加しました`,
         teamId: invitation.teamId
       });
+      
+      // チーム全員に通知（招待者と承認者を除く）
+      const joinedUserId = user.uid; // 承認者（参加した人）
+      const inviterUserId = invitation.invitedBy; // 招待者
+      
+      for (const member of team.members) {
+        // 招待者と承認者を除く
+        if (member.userId === inviterUserId || member.userId === joinedUserId) {
+          continue;
+        }
+        
+        // チーム向けの通知
+        await this.notificationService.createNotification({
+          userId: member.userId,
+          type: NotificationType.TeamInvitationAccepted,
+          title: 'チームメンバーが参加しました',
+          message: `${user.displayName || user.email}がチーム「${team.name}」に参加しました`,
+          teamId: invitation.teamId
+        });
+      }
+      
+      return { alreadyMember: false, teamId: invitation.teamId };
     } catch (error: any) {
       throw new Error(error.message);
     }

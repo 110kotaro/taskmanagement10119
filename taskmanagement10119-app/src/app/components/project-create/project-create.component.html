@@ -37,7 +37,7 @@
       </div>
 
       <!-- チームモード時に担当者選択 -->
-      <div class="form-group" *ngIf="viewMode === 'team' && selectedTeamId && teamMembers.length > 0">
+      <div class="form-group" *ngIf="viewMode === 'team' && selectedTeamId">
         <label for="assigneeId">担当者</label>
         <select id="assigneeId" formControlName="assigneeId" class="form-select">
           <option value="">担当者を選択（任意）</option>
@@ -45,6 +45,7 @@
             {{ member.userName }}
           </option>
         </select>
+        <p *ngIf="teamMembers.length === 0" class="info-text">チームメンバーが読み込まれていません</p>
       </div>
 
       <!-- 個人モード時はチーム選択なし -->
@@ -54,7 +55,7 @@
 
       <div class="form-actions">
         <button type="button" class="cancel-btn" (click)="goBack()">キャンセル</button>
-        <button type="submit" class="create-btn" [disabled]="createForm.invalid || isCreating">
+        <button type="submit" class="create-btn" [disabled]="isCreating">
           {{ isCreating ? '作成中...' : '作成' }}
         </button>
       </div>

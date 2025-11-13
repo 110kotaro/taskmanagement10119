@@ -18,7 +18,7 @@
 
       <div class="form-actions">
         <button type="button" class="cancel-btn" (click)="goBack()">キャンセル</button>
-        <button type="submit" class="create-btn" [disabled]="createForm.invalid || isCreating">
+        <button type="submit" class="create-btn" [disabled]="isCreating">
           {{ isCreating ? '作成中...' : '作成' }}
         </button>
       </div>

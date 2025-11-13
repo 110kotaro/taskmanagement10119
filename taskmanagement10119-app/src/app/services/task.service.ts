@@ -21,6 +21,7 @@ import { NotificationService } from './notification.service';
 import { ProjectService } from './project.service';
 import { NotificationType } from '../models/notification.model';
 import { User, UserRole } from '../models/user.model';
+import { TeamService } from './team.service';
 
 @Injectable({
   providedIn: 'root'
@@ -29,17 +30,26 @@ export class TaskService {
   private authService = inject(AuthService);
   private notificationService = inject(NotificationService);
   private projectService = inject(ProjectService);
+  private teamService = inject(TeamService);
 
   async createTask(taskData: Partial<Task>): Promise<string> {
     try {
       const user = this.authService.currentUser;
       if (!user) throw new Error('User not authenticated');
 
+      // 個人タスクの場合、担当者を自動で作成者に設定
+      let finalAssigneeId = taskData.assigneeId;
+      let finalAssigneeName = taskData.assigneeName;
+      if (!taskData.teamId) {
+        finalAssigneeId = user.uid;
+        finalAssigneeName = user.displayName || user.email || 'Unknown';
+      }
+
       // undefinedのフィールドを除外する
       const task: any = {
         title: taskData.title || '',
-        assigneeId: taskData.assigneeId || '',
-        assigneeName: taskData.assigneeName || '',
+        assigneeId: finalAssigneeId || '',
+        assigneeName: finalAssigneeName || '',
         creatorId: user.uid,
         creatorName: user.displayName || user.email || 'Unknown',
         status: taskData.status || TaskStatus.NotStarted,
@@ -69,7 +79,6 @@ export class TaskService {
       if (taskData.teamId !== undefined) task.teamId = taskData.teamId;
       if (taskData.teamName !== undefined) task.teamName = taskData.teamName;
       if (taskData.customPriority !== undefined) task.customPriority = taskData.customPriority;
-      if (taskData.customTaskType !== undefined) task.customTaskType = taskData.customTaskType;
       if (taskData.memo !== undefined) task.memo = taskData.memo;
       if (taskData.recurrenceEndDate !== undefined) task.recurrenceEndDate = taskData.recurrenceEndDate;
 
@@ -106,18 +115,81 @@ export class TaskService {
 
   // 権限チェックメソッド
   async canViewTask(task: Task, userId: string): Promise<boolean> {
-    // 全ユーザーが全タスクを閲覧可能（後でフィルターや個人/チーム切り替えで対応）
-    return true;
+    try {
+      // タスク作成者は常に閲覧可能
+      if (task.creatorId === userId) return true;
+      
+      // チームタスクの場合のみ、担当者も閲覧可能
+      if (task.teamId && task.assigneeId === userId) return true;
+      
+      // チームタスクの場合、チームメンバー全員が閲覧可能
+      if (task.teamId) {
+        const team = await this.teamService.getTeam(task.teamId);
+        if (team) {
+          const isOwner = team.ownerId === userId;
+          const isMember = team.members.some(m => m.userId === userId);
+          if (isOwner || isMember) return true;
+        }
+      }
+      
+      // プロジェクトタスクの場合、プロジェクトメンバーまたはチームメンバーも閲覧可能
+      if (task.projectId) {
+        const project = await this.projectService.getProject(task.projectId);
+        if (project) {
+          // プロジェクトオーナーは閲覧可能
+          if (project.ownerId === userId) return true;
+          // プロジェクトメンバーも閲覧可能
+          if (project.members && project.members.some(m => m.userId === userId)) {
+            return true;
+          }
+          // チームプロジェクトの場合、チームメンバー全員が閲覧可能
+          if (project.teamId) {
+            const team = await this.teamService.getTeam(project.teamId);
+            if (team) {
+              const isOwner = team.ownerId === userId;
+              const isMember = team.members.some(m => m.userId === userId);
+              if (isOwner || isMember) return true;
+            }
+          }
+        }
+      }
+      
+      // 個人タスクの場合、作成者のみ閲覧可能（既にチェック済み）
+      return false;
+    } catch (error) {
+      console.error('Error checking view permission:', error);
+      return false;
+    }
   }
 
   async canEditTask(task: Task, userId: string): Promise<boolean> {
     try {
-      // 管理者は常に編集可能
-      const user = await this.authService.getUser(userId);
-      if (user?.role === UserRole.Admin) return true;
+      // タスク作成者は編集可能
+      if (task.creatorId === userId) return true;
       
-      // 作成者、担当者は編集可能
-      return task.creatorId === userId || task.assigneeId === userId;
+      // チームタスクの場合のみ、担当者も編集可能
+      if (task.teamId && task.assigneeId === userId) return true;
+      
+      // チームタスクの場合、チーム管理者（オーナー含む）も編集可能
+      if (task.teamId) {
+        const canEdit = await this.teamService.canEditTeam(task.teamId, userId);
+        if (canEdit) return true;
+      }
+      
+      // プロジェクトタスクの場合、タスク作成者・担当者・プロジェクトオーナー・プロジェクト担当者が編集可能
+      if (task.projectId) {
+        const project = await this.projectService.getProject(task.projectId);
+        if (project) {
+          // タスク担当者も編集可能
+          if (task.assigneeId === userId) return true;
+          // プロジェクトオーナーも編集可能
+          if (project.ownerId === userId) return true;
+          // プロジェクト担当者も編集可能
+          if (project.assigneeId === userId) return true;
+        }
+      }
+      
+      return false;
     } catch (error) {
       console.error('Error checking edit permission:', error);
       return false;
@@ -126,19 +198,60 @@ export class TaskService {
 
   async canDeleteTask(task: Task, userId: string): Promise<boolean> {
     try {
-      // 管理者は常に削除可能
-      const user = await this.authService.getUser(userId);
-      if (user?.role === UserRole.Admin) return true;
+      // タスク作成者は削除可能
+      if (task.creatorId === userId) return true;
       
-      // 作成者のみ削除可能（担当者は削除不可）
-      return task.creatorId === userId;
+      // チームタスクの場合、チーム管理者（オーナー含む）も削除可能
+      if (task.teamId) {
+        const canEdit = await this.teamService.canEditTeam(task.teamId, userId);
+        if (canEdit) return true;
+      }
+      
+      // プロジェクトタスクの場合、プロジェクトオーナーも削除可能
+      if (task.projectId) {
+        const project = await this.projectService.getProject(task.projectId);
+        if (project && project.ownerId === userId) return true;
+      }
+      
+      return false;
     } catch (error) {
       console.error('Error checking delete permission:', error);
       return false;
     }
   }
 
-  async updateTask(taskId: string, updates: Partial<Task>, skipAutoComment: boolean = false): Promise<void> {
+  async canRestoreTask(task: Task, userId: string): Promise<boolean> {
+    // 復元権限は削除権限と同じ
+    return await this.canDeleteTask(task, userId);
+  }
+
+  async canPermanentlyDeleteTask(task: Task, userId: string): Promise<boolean> {
+    try {
+      // 個人タスクの場合、作成者のみ完全削除可能
+      if (!task.teamId) {
+        return task.creatorId === userId;
+      }
+      
+      // チームタスクの場合、チーム管理者のみ完全削除可能
+      if (task.teamId) {
+        const canEdit = await this.teamService.canEditTeam(task.teamId, userId);
+        if (canEdit) return true;
+      }
+      
+      // プロジェクトタスクの場合、プロジェクトオーナーも完全削除可能
+      if (task.projectId) {
+        const project = await this.projectService.getProject(task.projectId);
+        if (project && project.ownerId === userId) return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error checking permanently delete permission:', error);
+      return false;
+    }
+  }
+
+  async updateTask(taskId: string, updates: Partial<Task>, skipAutoComment: boolean = false, skipNotification: boolean = false): Promise<void> {
     try {
       const user = this.authService.currentUser;
       if (!user) throw new Error('User not authenticated');
@@ -147,8 +260,41 @@ export class TaskService {
       const taskBeforeUpdate = await this.getTask(taskId);
       if (!taskBeforeUpdate) throw new Error('Task not found');
       
-      if (!await this.canEditTask(taskBeforeUpdate, user.uid)) {
-        throw new Error('このタスクを編集する権限がありません');
+      // コメントのみの更新の場合は閲覧権限で許可、それ以外は編集権限が必要
+      // updatedAtなどを除外して判定
+      const updateKeys = Object.keys(updates).filter(key => key !== 'updatedAt');
+      const isCommentOnlyUpdate = updateKeys.length === 1 && updates.comments !== undefined;
+      if (isCommentOnlyUpdate) {
+        if (!await this.canViewTask(taskBeforeUpdate, user.uid)) {
+          throw new Error('このタスクを閲覧する権限がありません');
+        }
+      } else {
+        if (!await this.canEditTask(taskBeforeUpdate, user.uid)) {
+          throw new Error('このタスクを編集する権限がありません');
+        }
+      }
+
+      // ステータスが変更される場合、dateCheckedAtをリセット
+      // これにより、誤ってステータスを戻した場合も再度チェックされる
+      if (updates.status !== undefined && taskBeforeUpdate.status !== updates.status) {
+        // ステータスが変更された場合、dateCheckedAtをリセット
+        // undefinedにすることで、後でcleanUpdatesの処理でdeleteField()に変換される
+        updates.dateCheckedAt = undefined;
+      }
+
+      // 個人タスクの場合、担当者を自動で作成者に設定（変更を無視）
+      if (!taskBeforeUpdate.teamId && updates.assigneeId !== undefined) {
+        updates.assigneeId = taskBeforeUpdate.creatorId;
+        // assigneeNameも更新
+        const creatorUser = await this.authService.getUser(taskBeforeUpdate.creatorId);
+        updates.assigneeName = creatorUser?.displayName || creatorUser?.email || 'Unknown';
+      }
+
+      // 復元権限チェック（isDeletedがfalseに変更される場合）
+      if (updates.isDeleted === false && taskBeforeUpdate.isDeleted === true) {
+        if (!await this.canRestoreTask(taskBeforeUpdate, user.uid)) {
+          throw new Error('このタスクを復元する権限がありません');
+        }
       }
 
       const taskRef = doc(db, 'tasks', taskId);
@@ -258,13 +404,15 @@ export class TaskService {
       // 更新通知を送信（更新前のタスク情報を使用してステータス変更を判定）
       // 復元処理の場合、taskBeforeUpdate.isDeletedを一時的にtrueに設定
       // （Firestoreから取得した時点で既にfalseになっている可能性があるため）
-      const taskForNotification = { ...taskBeforeUpdate };
-      if (updates.isDeleted === false && taskBeforeUpdate.isDeleted === false) {
-        // 復元処理の場合、元の状態をtrueと仮定
-        taskForNotification.isDeleted = true;
+      if (!skipNotification) {
+        const taskForNotification = { ...taskBeforeUpdate };
+        if (updates.isDeleted === false && taskBeforeUpdate.isDeleted === false) {
+          // 復元処理の場合、元の状態をtrueと仮定
+          taskForNotification.isDeleted = true;
+        }
+        
+        await this.sendTaskUpdatedNotifications(taskId, taskForNotification, updates);
       }
-      
-      await this.sendTaskUpdatedNotifications(taskId, taskForNotification, updates);
       
       // プロジェクトに紐づいている場合は、プロジェクトの完了率を再計算
       const updatedTask = await this.getTask(taskId);
@@ -292,6 +440,11 @@ export class TaskService {
       
       const projectId = task.projectId;
       
+      // 親タスクの場合は子タスクを完全削除
+      if (task.isRecurrenceParent) {
+        await this.permanentlyDeleteChildTasks(taskId);
+      }
+      
       const taskRef = doc(db, 'tasks', taskId);
       await updateDoc(taskRef, {
         isDeleted: true,
@@ -299,16 +452,29 @@ export class TaskService {
         statusBeforeDeletion: task.status // 削除前のステータスを保存
       });
       
-      // 削除通知を送信
-      await this.sendTaskDeletedNotifications(taskId, task);
+      // タスク削除自体は成功したので、通知と再計算のエラーは別途処理
+      try {
+        // 削除通知を送信
+        await this.sendTaskDeletedNotifications(taskId, task);
+      } catch (notificationError: any) {
+        console.error('Error sending task deleted notifications:', notificationError);
+        // 通知エラーはタスク削除の失敗として扱わない
+      }
       
-      // プロジェクトに紐づいている場合は、プロジェクトの完了率を再計算
-      if (projectId) {
-        await this.projectService.recalculateProjectCompletionRate(projectId);
+      try {
+        // プロジェクトに紐づいている場合は、プロジェクトの完了率を再計算
+        if (projectId) {
+          await this.projectService.recalculateProjectCompletionRate(projectId);
+        }
+      } catch (recalcError: any) {
+        console.error('Error recalculating project completion rate:', recalcError);
+        // 再計算エラーはタスク削除の失敗として扱わない
       }
     } catch (error: any) {
       console.error('Error deleting task:', error);
-      throw new Error(error.message);
+      // エラーメッセージがない場合のフォールバック
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+      throw new Error(errorMessage);
     }
   }
 
@@ -357,8 +523,19 @@ export class TaskService {
       if (filters.teamId !== undefined) {
         if (filters.teamId === null) {
           // 個人モード: 自分が作成したタスク または 所属チームのタスクで自分が担当者
+          // または チームプロジェクトタスクで、そのプロジェクト内に自分が担当しているタスクがある場合
           if (filters.userId && filters.userTeamIds && filters.userTeamIds.length > 0) {
             const userTeamIds = filters.userTeamIds; // 型チェック用に変数に保存
+            
+            // 担当タスクがあるプロジェクトIDのセットを作成
+            const projectIdsWithAssignedTasks = new Set<string>();
+            const assignedTasks = tasks.filter(task => task.assigneeId === filters.userId && task.projectId);
+            for (const task of assignedTasks) {
+              if (task.projectId) {
+                projectIdsWithAssignedTasks.add(task.projectId);
+              }
+            }
+            
             filteredTasks = tasks.filter(task => {
               // 個人タスク（teamIdが未設定）で自分が作成者
               if (!task.teamId && task.creatorId === filters.userId) {
@@ -366,6 +543,10 @@ export class TaskService {
               }
               // チームタスクで自分が担当者かつ所属チームに含まれる
               if (task.teamId && task.assigneeId === filters.userId && userTeamIds.includes(task.teamId)) {
+                return true;
+              }
+              // チームプロジェクトタスクで、そのプロジェクト内に自分が担当しているタスクがある場合
+              if (task.projectId && projectIdsWithAssignedTasks.has(task.projectId)) {
                 return true;
               }
               return false;
@@ -378,8 +559,25 @@ export class TaskService {
             filteredTasks = tasks.filter(task => !task.teamId);
           }
         } else {
-          // チームタスク（teamIdが一致）
-          filteredTasks = tasks.filter(task => task.teamId === filters.teamId);
+          // チームモード: チームタスク（teamIdが一致）またはチームプロジェクトタスク
+          const filteredTasksResult: Task[] = [];
+          for (const task of tasks) {
+            let shouldInclude = false;
+            // チームタスク（teamIdが一致）
+            if (task.teamId === filters.teamId) {
+              shouldInclude = true;
+            } else if (task.projectId) {
+              // プロジェクトタスクの場合、プロジェクトのteamIdをチェック
+              const project = await this.projectService.getProject(task.projectId);
+              if (project && project.teamId === filters.teamId) {
+                shouldInclude = true;
+              }
+            }
+            if (shouldInclude) {
+              filteredTasksResult.push(task);
+            }
+          }
+          filteredTasks = filteredTasksResult;
         }
       }
 
@@ -436,6 +634,17 @@ export class TaskService {
       // teamIdフィルタリング
       if (teamId === null) {
         // 個人モード: 自分が作成したタスク または 所属チームのタスクで自分が担当者
+        // または チームプロジェクトタスクで、そのプロジェクト内に自分が担当しているタスクがある場合
+        
+        // 担当タスクがあるプロジェクトIDのセットを作成
+        const projectIdsWithAssignedTasks = new Set<string>();
+        const assignedTasks = filteredTasks.filter(task => task.assigneeId === userId && task.projectId);
+        for (const task of assignedTasks) {
+          if (task.projectId) {
+            projectIdsWithAssignedTasks.add(task.projectId);
+          }
+        }
+        
         filteredTasks = filteredTasks.filter(task => {
           // 個人タスク（teamIdが未設定）で自分が作成者
           if (!task.teamId && task.creatorId === userId) {
@@ -445,11 +654,32 @@ export class TaskService {
           if (task.teamId && task.assigneeId === userId && userTeamIds.includes(task.teamId)) {
             return true;
           }
+          // チームプロジェクトタスクで、そのプロジェクト内に自分が担当しているタスクがある場合
+          if (task.projectId && projectIdsWithAssignedTasks.has(task.projectId)) {
+            return true;
+          }
           return false;
         });
       } else if (teamId) {
-        // チームタスク（teamIdが一致）
-        filteredTasks = filteredTasks.filter(task => task.teamId === teamId);
+        // チームモード: チームタスク（teamIdが一致）またはチームプロジェクトタスク
+        const filteredTasksResult: Task[] = [];
+        for (const task of filteredTasks) {
+          let shouldInclude = false;
+          // チームタスク（teamIdが一致）
+          if (task.teamId === teamId) {
+            shouldInclude = true;
+          } else if (task.projectId) {
+            // プロジェクトタスクの場合、プロジェクトのteamIdをチェック
+            const project = await this.projectService.getProject(task.projectId);
+            if (project && project.teamId === teamId) {
+              shouldInclude = true;
+            }
+          }
+          if (shouldInclude) {
+            filteredTasksResult.push(task);
+          }
+        }
+        filteredTasks = filteredTasksResult;
       }
       
       console.log('Filtered today tasks (on or after today):', filteredTasks.length);
@@ -510,6 +740,17 @@ export class TaskService {
       let filteredTasks = dateFilteredTasks;
       if (teamId === null) {
         // 個人モード: 自分が作成したタスク または 所属チームのタスクで自分が担当者
+        // または チームプロジェクトタスクで、そのプロジェクト内に自分が担当しているタスクがある場合
+        
+        // 担当タスクがあるプロジェクトIDのセットを作成
+        const projectIdsWithAssignedTasks = new Set<string>();
+        const assignedTasks = dateFilteredTasks.filter(task => task.assigneeId === userId && task.projectId);
+        for (const task of assignedTasks) {
+          if (task.projectId) {
+            projectIdsWithAssignedTasks.add(task.projectId);
+          }
+        }
+        
         filteredTasks = dateFilteredTasks.filter(task => {
           // 個人タスク（teamIdが未設定）で自分が作成者
           if (!task.teamId && task.creatorId === userId) {
@@ -519,11 +760,32 @@ export class TaskService {
           if (task.teamId && task.assigneeId === userId && userTeamIds.includes(task.teamId)) {
             return true;
           }
+          // チームプロジェクトタスクで、そのプロジェクト内に自分が担当しているタスクがある場合
+          if (task.projectId && projectIdsWithAssignedTasks.has(task.projectId)) {
+            return true;
+          }
           return false;
         });
       } else if (teamId) {
-        // チームタスク（teamIdが一致）
-        filteredTasks = dateFilteredTasks.filter(task => task.teamId === teamId);
+        // チームモード: チームタスク（teamIdが一致）またはチームプロジェクトタスク
+        const filteredTasksResult: Task[] = [];
+        for (const task of dateFilteredTasks) {
+          let shouldInclude = false;
+          // チームタスク（teamIdが一致）
+          if (task.teamId === teamId) {
+            shouldInclude = true;
+          } else if (task.projectId) {
+            // プロジェクトタスクの場合、プロジェクトのteamIdをチェック
+            const project = await this.projectService.getProject(task.projectId);
+            if (project && project.teamId === teamId) {
+              shouldInclude = true;
+            }
+          }
+          if (shouldInclude) {
+            filteredTasksResult.push(task);
+          }
+        }
+        filteredTasks = filteredTasksResult;
       }
       
       console.log('Filtered week tasks:', filteredTasks.length);
@@ -539,13 +801,17 @@ export class TaskService {
       const creator = this.authService.currentUser;
       if (!creator) return;
 
-      // 担当者に通知
-      if (task.assigneeId && task.assigneeId !== '' && task.assigneeId !== creator.uid) {
+      // 担当者に通知（チームタスクで担当者が未割当の場合は作成者に通知）
+      const notificationUserId = (task.teamId && (!task.assigneeId || task.assigneeId === '')) 
+        ? task.creatorId 
+        : task.assigneeId;
+      
+      if (notificationUserId && notificationUserId !== '' && notificationUserId !== creator.uid) {
         await this.notificationService.createNotification({
-          userId: task.assigneeId,
+          userId: notificationUserId,
           type: NotificationType.TaskCreated,
           title: '新しいタスクが割り当てられました',
-          message: `${creator.displayName || creator.email}が「${task.title}」というタスクをあなたに割り当てました`,
+          message: `${creator.displayName || creator.email}が、新しいタスク「${task.title}」をあなたに割り当てました`,
           taskId: taskId,
           projectId: task.projectId
         });
@@ -557,8 +823,11 @@ export class TaskService {
         if (project) {
           const projectMembers = project.members || [];
           for (const member of projectMembers) {
-            // 作成者と担当者は既に通知済みなのでスキップ
-            if (member.userId !== creator.uid && member.userId !== task.assigneeId) {
+            // 作成者と担当者（チームタスクで担当者未割当の場合は作成者）は既に通知済みなのでスキップ
+            const assigneeOrCreatorId = (task.teamId && (!task.assigneeId || task.assigneeId === '')) 
+              ? task.creatorId 
+              : task.assigneeId;
+            if (member.userId !== creator.uid && member.userId !== assigneeOrCreatorId) {
               await this.notificationService.createNotification({
                 userId: member.userId,
                 type: NotificationType.TaskCreated,
@@ -587,10 +856,14 @@ export class TaskService {
       // 復元時の通知（isDeletedがfalseに変更された場合）
       if (updates.isDeleted === false && task.isDeleted === true) {
         // 復元通知を送信
-        // 担当者に通知（復元者と異なる場合）
-        if (task.assigneeId && task.assigneeId !== '' && task.assigneeId !== updater.uid) {
+        // 担当者に通知（チームタスクで担当者が未割当の場合は作成者に通知）
+        const notificationUserId = (task.teamId && (!task.assigneeId || task.assigneeId === '')) 
+          ? task.creatorId 
+          : task.assigneeId;
+        
+        if (notificationUserId && notificationUserId !== '' && notificationUserId !== updater.uid) {
           await this.notificationService.createNotification({
-            userId: task.assigneeId,
+            userId: notificationUserId,
             type: NotificationType.TaskRestored,
             title: 'タスクが復元されました',
             message: `${updater.displayName || updater.email}が「${task.title}」を復元しました`,
@@ -605,8 +878,11 @@ export class TaskService {
           if (project) {
             const projectMembers = project.members || [];
             for (const member of projectMembers) {
-              // 復元者と担当者はスキップ
-              if (member.userId !== updater.uid && member.userId !== task.assigneeId) {
+              // 復元者と担当者（チームタスクで担当者未割当の場合は作成者）はスキップ
+              const assigneeOrCreatorId = (task.teamId && (!task.assigneeId || task.assigneeId === '')) 
+                ? task.creatorId 
+                : task.assigneeId;
+              if (member.userId !== updater.uid && member.userId !== assigneeOrCreatorId) {
                 await this.notificationService.createNotification({
                   userId: member.userId,
                   type: NotificationType.TaskRestored,
@@ -654,10 +930,15 @@ export class TaskService {
 
       // ステータス変更の場合、担当者に通知
       if (updates.status && updates.status !== task.status) {
+        // チームタスクで担当者が未割当の場合は作成者に通知
+        const notificationUserId = (task.teamId && (!task.assigneeId || task.assigneeId === '')) 
+          ? task.creatorId 
+          : task.assigneeId;
+        
         // 完了時の通知（更新者が担当者と異なる場合、担当者に完了通知を送信）
-        if (updates.status === TaskStatus.Completed && task.assigneeId && task.assigneeId !== '' && task.assigneeId !== updater.uid) {
+        if (updates.status === TaskStatus.Completed && notificationUserId && notificationUserId !== '' && notificationUserId !== updater.uid) {
           await this.notificationService.createNotification({
-            userId: task.assigneeId,
+            userId: notificationUserId,
             type: NotificationType.TaskCompleted,
             title: 'タスクが完了しました',
             message: `${updater.displayName || updater.email}が「${task.title}」を完了しました`,
@@ -668,9 +949,9 @@ export class TaskService {
         // その他のステータス変更の場合
         else if (updates.status !== TaskStatus.Completed) {
           // 担当者が設定されていて、更新者と異なる場合
-          if (task.assigneeId && task.assigneeId !== '' && task.assigneeId !== updater.uid) {
+          if (notificationUserId && notificationUserId !== '' && notificationUserId !== updater.uid) {
             await this.notificationService.createNotification({
-              userId: task.assigneeId,
+              userId: notificationUserId,
               type: NotificationType.TaskUpdated,
               title: 'タスクのステータスが変更されました',
               message: `${updater.displayName || updater.email}が「${task.title}」のステータスを変更しました`,
@@ -685,8 +966,8 @@ export class TaskService {
             if (project) {
               const projectMembers = project.members || [];
               for (const member of projectMembers) {
-                // 更新者と担当者はスキップ
-                if (member.userId !== updater.uid && member.userId !== task.assigneeId) {
+                // 更新者と担当者（チームタスクで担当者未割当の場合は作成者）はスキップ
+                if (member.userId !== updater.uid && member.userId !== notificationUserId) {
                   await this.notificationService.createNotification({
                     userId: member.userId,
                     type: NotificationType.TaskUpdated,
@@ -709,8 +990,11 @@ export class TaskService {
         if (project) {
           const projectMembers = project.members || [];
           for (const member of projectMembers) {
-            // 更新者と担当者はスキップ
-            if (member.userId !== updater.uid && member.userId !== task.assigneeId) {
+            // 更新者と担当者（チームタスクで担当者未割当の場合は作成者）はスキップ
+            const assigneeOrCreatorId = (task.teamId && (!task.assigneeId || task.assigneeId === '')) 
+              ? task.creatorId 
+              : task.assigneeId;
+            if (member.userId !== updater.uid && member.userId !== assigneeOrCreatorId) {
               await this.notificationService.createNotification({
                 userId: member.userId,
                 type: NotificationType.TaskUpdated,
@@ -723,10 +1007,14 @@ export class TaskService {
           }
         }
       } else if (!updates.status) {
-        // プロジェクトに紐づいていない場合は、担当者に通知（更新者が担当者でない場合）
-        if (task.assigneeId && task.assigneeId !== updater.uid) {
+        // プロジェクトに紐づいていない場合は、担当者に通知（チームタスクで担当者が未割当の場合は作成者に通知）
+        const notificationUserId = (task.teamId && (!task.assigneeId || task.assigneeId === '')) 
+          ? task.creatorId 
+          : task.assigneeId;
+        
+        if (notificationUserId && notificationUserId !== '' && notificationUserId !== updater.uid) {
           await this.notificationService.createNotification({
-            userId: task.assigneeId,
+            userId: notificationUserId,
             type: NotificationType.TaskUpdated,
             title: 'タスクが更新されました',
             message: `${updater.displayName || updater.email}が「${task.title}」を更新しました`,
@@ -746,10 +1034,14 @@ export class TaskService {
       const deleter = this.authService.currentUser;
       if (!deleter) return;
 
-      // 担当者に通知（削除者と異なる場合）
-      if (task.assigneeId && task.assigneeId !== '' && task.assigneeId !== deleter.uid) {
+      // 担当者に通知（チームタスクで担当者が未割当の場合は作成者に通知）
+      const notificationUserId = (task.teamId && (!task.assigneeId || task.assigneeId === '')) 
+        ? task.creatorId 
+        : task.assigneeId;
+      
+      if (notificationUserId && notificationUserId !== '' && notificationUserId !== deleter.uid) {
         await this.notificationService.createNotification({
-          userId: task.assigneeId,
+          userId: notificationUserId,
           type: NotificationType.TaskDeleted,
           title: 'タスクが削除されました',
           message: `${deleter.displayName || deleter.email}が「${task.title}」を削除しました`,
@@ -764,8 +1056,11 @@ export class TaskService {
         if (project) {
           const projectMembers = project.members || [];
           for (const member of projectMembers) {
-            // 削除者と担当者はスキップ
-            if (member.userId !== deleter.uid && member.userId !== task.assigneeId) {
+            // 削除者と担当者（チームタスクで担当者未割当の場合は作成者）はスキップ
+            const assigneeOrCreatorId = (task.teamId && (!task.assigneeId || task.assigneeId === '')) 
+              ? task.creatorId 
+              : task.assigneeId;
+            if (member.userId !== deleter.uid && member.userId !== assigneeOrCreatorId) {
               await this.notificationService.createNotification({
                 userId: member.userId,
                 type: NotificationType.TaskDeleted,
@@ -815,10 +1110,18 @@ export class TaskService {
     // 時間が23:59:59の場合は日付のみで判断、それ以外は時間も考慮
     const endTime = endDate.getHours() * 3600 + endDate.getMinutes() * 60 + endDate.getSeconds();
     const endTimeMax = 23 * 3600 + 59 * 60 + 59; // 23:59:59
-    const needsEndDateCheck = (task.status === TaskStatus.NotStarted || task.status === TaskStatus.InProgress) &&
-                              (endTime === endTimeMax ? 
-                                endDate.getTime() < today.getTime() : 
-                                endDate.getTime() < now.getTime());
+    let needsEndDateCheck = false;
+    if (endTime === endTimeMax) {
+      // 終了日の翌日の00:00:00と比較
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      needsEndDateCheck = (task.status === TaskStatus.NotStarted || task.status === TaskStatus.InProgress) &&
+                          endDate.getTime() < tomorrow.getTime();
+    } else {
+      // 時刻も含めて比較
+      needsEndDateCheck = (task.status === TaskStatus.NotStarted || task.status === TaskStatus.InProgress) &&
+                          endDate.getTime() < now.getTime();
+    }
     
     return { needsStartDateCheck, needsEndDateCheck };
   }
@@ -894,7 +1197,6 @@ export class TaskService {
       if (originalTask.projectId !== undefined) duplicatedTask.projectId = originalTask.projectId;
       if (originalTask.projectName !== undefined) duplicatedTask.projectName = originalTask.projectName;
       if (originalTask.customPriority !== undefined) duplicatedTask.customPriority = originalTask.customPriority;
-      if (originalTask.customTaskType !== undefined) duplicatedTask.customTaskType = originalTask.customTaskType;
       if (originalTask.memo !== undefined) duplicatedTask.memo = originalTask.memo;
       if (originalTask.recurrenceEndDate !== undefined) duplicatedTask.recurrenceEndDate = originalTask.recurrenceEndDate;
 
@@ -942,6 +1244,10 @@ export class TaskService {
       const endDate = parentTask.endDate.toDate();
       const duration = endDate.getTime() - startDate.getTime(); // タスクの期間（ミリ秒）
 
+      // 現在日時を取得（今日の0時0分0秒）
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+
       // 繰り返し終了日を決定
       let recurrenceEndDate: Date;
       const maxPeriod = this.getMaxRecurrencePeriod(parentTask.recurrence);
@@ -960,6 +1266,11 @@ export class TaskService {
         // 繰り返し終了日が未設定の場合は最大期間で生成
         recurrenceEndDate = maxEndDate;
       }
+
+      // 繰り返し終了日が未設定の場合は、親タスクには保存しない（ローリング生成を有効にするため）
+      // ただし、子タスク生成の計算にはrecurrenceEndDate（最大期間）を使用する
+      let finalRecurrenceEndDate: Timestamp | undefined = parentTask.recurrenceEndDate;
+      // parentTask.recurrenceEndDateが未設定の場合は、finalRecurrenceEndDateもundefinedのまま
 
       const generatedTaskIds: string[] = [];
       let currentStartDate = new Date(startDate);
@@ -999,6 +1310,43 @@ export class TaskService {
       // 日付計算ループ
       while (currentStartDate <= recurrenceEndDate) {
         const currentEndDate = new Date(currentStartDate.getTime() + duration);
+        const currentStartDateOnly = new Date(currentStartDate.getFullYear(), currentStartDate.getMonth(), currentStartDate.getDate());
+
+        // 現在日時より後のタスクのみを生成
+        if (currentStartDateOnly < now) {
+          // 現在日時より前の場合はスキップして次の日付へ
+          switch (parentTask.recurrence) {
+            case RecurrenceType.Daily:
+              currentStartDate.setDate(currentStartDate.getDate() + 1);
+              break;
+            case RecurrenceType.Weekly:
+              currentStartDate.setDate(currentStartDate.getDate() + 7);
+              break;
+            case RecurrenceType.Biweekly:
+              currentStartDate.setDate(currentStartDate.getDate() + 14);
+              break;
+            case RecurrenceType.Monthly:
+              const nextMonth = new Date(currentStartDate);
+              nextMonth.setMonth(nextMonth.getMonth() + 1);
+              if (nextMonth.getDate() !== currentStartDate.getDate()) {
+                nextMonth.setDate(0);
+              }
+              currentStartDate = nextMonth;
+              break;
+            case RecurrenceType.Yearly:
+              currentStartDate.setFullYear(currentStartDate.getFullYear() + 1);
+              if (currentStartDate.getMonth() === 1 && currentStartDate.getDate() === 29) {
+                const year = currentStartDate.getFullYear();
+                const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+                if (!isLeapYear) {
+                  currentStartDate.setDate(28);
+                }
+              }
+              break;
+          }
+          instanceNumber++;
+          continue;
+        }
 
         // 繰り返し終了日を超えないようにチェック
         if (currentStartDate > recurrenceEndDate) {
@@ -1033,7 +1381,6 @@ export class TaskService {
           workSessions: [],
           totalWorkTime: 0,
           recurrence: parentTask.recurrence,
-          recurrenceEndDate: parentTask.recurrenceEndDate,
           parentTaskId: parentTask.id,
           recurrenceInstance: instanceNumber,
           isRecurrenceParent: false,
@@ -1044,11 +1391,13 @@ export class TaskService {
         };
 
         // undefinedでないフィールドのみ追加
+        if (finalRecurrenceEndDate !== undefined) recurringTask.recurrenceEndDate = finalRecurrenceEndDate;
         if (parentTask.description !== undefined) recurringTask.description = parentTask.description;
         if (parentTask.projectId !== undefined) recurringTask.projectId = parentTask.projectId;
         if (parentTask.projectName !== undefined) recurringTask.projectName = parentTask.projectName;
+        if (parentTask.teamId !== undefined) recurringTask.teamId = parentTask.teamId;
+        if (parentTask.teamName !== undefined) recurringTask.teamName = parentTask.teamName;
         if (parentTask.customPriority !== undefined) recurringTask.customPriority = parentTask.customPriority;
-        if (parentTask.customTaskType !== undefined) recurringTask.customTaskType = parentTask.customTaskType;
         if (parentTask.memo !== undefined) recurringTask.memo = parentTask.memo;
 
         const docRef = await addDoc(collection(db, 'tasks'), recurringTask);
@@ -1095,10 +1444,18 @@ export class TaskService {
       }
 
       // 親タスクを更新（isRecurrenceParentとrecurrenceInstanceを設定）
-      await updateDoc(doc(db, 'tasks', parentTask.id), {
+      const updateData: any = {
         isRecurrenceParent: true,
         recurrenceInstance: 0
-      });
+      };
+      // 繰り返し終了日が設定されている場合のみ親タスクに保存（未設定の場合はローリング生成を有効にするため）
+      if (finalRecurrenceEndDate !== undefined) {
+        updateData.recurrenceEndDate = finalRecurrenceEndDate;
+      } else {
+        // 未設定の場合は明示的に削除（既存の値がある場合に備えて）
+        updateData.recurrenceEndDate = deleteField();
+      }
+      await updateDoc(doc(db, 'tasks', parentTask.id), updateData);
 
       return generatedTaskIds;
     } catch (error: any) {
@@ -1107,59 +1464,94 @@ export class TaskService {
     }
   }
 
-  // ローリング生成：最初のタスクの終了日が過ぎたら、次のタスクを生成
+  // ローリング生成：各タスクの終了日が過ぎたら、最後のタスクの次の期間に新しいタスクを1つ追加
   async checkAndGenerateNextRecurrenceTask(parentTaskId: string): Promise<void> {
     try {
+      console.log(`[ローリング生成] チェック開始: parentTaskId=${parentTaskId}`);
       const parentTask = await this.getTask(parentTaskId);
       if (!parentTask || !parentTask.isRecurrenceParent || parentTask.recurrence === RecurrenceType.None) {
+        console.log(`[ローリング生成] スキップ: parentTask存在=${!!parentTask}, isRecurrenceParent=${parentTask?.isRecurrenceParent}, recurrence=${parentTask?.recurrence}`);
         return;
       }
 
-      // 最後のタスク（最大のrecurrenceInstance）を取得
+      // 繰り返し終了日が設定されている場合はローリング生成しない
+      if (parentTask.recurrenceEndDate) {
+        console.log(`[ローリング生成] スキップ: 繰り返し終了日が設定されています (${parentTask.recurrenceEndDate.toDate().toLocaleString('ja-JP')})`);
+        return;
+      }
+
+      // 親タスクと全ての子タスクを取得（インデックスエラーを避けるため、orderByは使わず取得後にソート）
       const q = query(
         collection(db, 'tasks'),
         where('parentTaskId', '==', parentTaskId),
-        where('isDeleted', '==', false),
-        orderBy('recurrenceInstance', 'desc')
+        where('isDeleted', '==', false)
       );
       const snapshot = await getDocs(q);
 
+      // 子タスクがない場合は不要（終了日未定の場合のみローリング生成するため、初回生成時に子タスクが作成される）
       if (snapshot.empty) {
-        // 子タスクがない場合は、親タスクを基準に生成
-        const now = new Date();
-        const parentEndDate = parentTask.endDate.toDate();
-        if (parentEndDate <= now) {
-          // 親タスクの終了日が過ぎているので、次のタスクを生成
-          await this.generateNextRecurrenceInstance(parentTask, 0);
-        }
+        console.log(`[ローリング生成] スキップ: 子タスクがありません`);
         return;
       }
 
-      // 最後のタスクを取得
-      const lastTask = snapshot.docs[0].data() as Task;
-      const lastEndDate = lastTask.endDate.toDate();
+      console.log(`[ローリング生成] 子タスク数: ${snapshot.docs.length}`);
+
       const now = new Date();
+      const allTasks: Task[] = [];
 
-      // 最後のタスクの終了日が過ぎているか、または過ぎそうな場合（1日前）
-      const oneDayBefore = new Date(now);
-      oneDayBefore.setDate(oneDayBefore.getDate() + 1);
+      // 親タスクを最初に追加（recurrenceInstanceは0または未設定）
+      allTasks.push(parentTask);
+      console.log(`[ローリング生成] 親タスク: ${parentTask.title}, 終了日=${parentTask.endDate.toDate().toLocaleString('ja-JP')}`);
 
-      if (lastEndDate <= oneDayBefore) {
-        // 繰り返し終了日をチェック
-        const recurrenceEndDate = parentTask.recurrenceEndDate 
-          ? parentTask.recurrenceEndDate.toDate()
-          : null;
-        
-        if (recurrenceEndDate && lastEndDate >= recurrenceEndDate) {
-          // 繰り返し終了日を超えているので生成しない
+      // 子タスクを追加してソート
+      const childTasks: Task[] = [];
+      snapshot.docs.forEach(doc => {
+        const childTask = { id: doc.id, ...doc.data() } as Task;
+        childTasks.push(childTask);
+      });
+      
+      // recurrenceInstanceでソート（未設定の場合は0として扱う）
+      childTasks.sort((a, b) => {
+        const aInstance = a.recurrenceInstance || 0;
+        const bInstance = b.recurrenceInstance || 0;
+        return aInstance - bInstance;
+      });
+      
+      // ソート済みの子タスクをallTasksに追加
+      childTasks.forEach(childTask => {
+        allTasks.push(childTask);
+        console.log(`[ローリング生成] 子タスク: ${childTask.title}, recurrenceInstance=${childTask.recurrenceInstance}, 終了日=${childTask.endDate.toDate().toLocaleString('ja-JP')}`);
+      });
+
+      console.log(`[ローリング生成] 現在時刻: ${now.toLocaleString('ja-JP')}`);
+
+      // 親タスクから順番に、終了日が過ぎたタスクを探す
+      for (const task of allTasks) {
+        const taskEndDate = task.endDate.toDate();
+        console.log(`[ローリング生成] チェック: タスク=${task.title}, 終了日=${taskEndDate.toLocaleString('ja-JP')}, 過ぎている=${taskEndDate <= now}`);
+        if (taskEndDate <= now) {
+          // 終了日が過ぎたタスクが見つかった
+          console.log(`[ローリング生成] 終了日が過ぎたタスクが見つかりました: ${task.title}`);
+          // 既に取得した子タスクから、recurrenceInstanceが最大のタスクを取得
+          // childTasksは既にrecurrenceInstanceでソートされているので、最後の要素が最大
+          if (childTasks.length === 0) {
+            // 子タスクがない場合は親タスクを基準にする
+            console.log(`[ローリング生成] 子タスクがないため、親タスクを基準に生成`);
+            await this.generateNextRecurrenceInstance(parentTask, 0);
+          } else {
+            // 最後の子タスクの次の期間に新しいタスクを1つ追加
+            const lastChildTask = childTasks[childTasks.length - 1];
+            console.log(`[ローリング生成] 最後の子タスク: recurrenceInstance=${lastChildTask.recurrenceInstance}, 終了日=${lastChildTask.endDate.toDate().toLocaleString('ja-JP')}`);
+            await this.generateNextRecurrenceInstance(parentTask, lastChildTask.recurrenceInstance || 0);
+          }
+          console.log(`[ローリング生成] 新しいタスクを生成しました`);
+          // 1つ追加したら終了（各タスクの終了日が過ぎるたびに1つずつ追加）
           return;
         }
-
-        // 次のタスクを生成
-        await this.generateNextRecurrenceInstance(parentTask, lastTask.recurrenceInstance || 0);
       }
+      console.log(`[ローリング生成] 終了日が過ぎたタスクが見つかりませんでした`);
     } catch (error: any) {
-      console.error('Error checking and generating next recurrence task:', error);
+      console.error('[ローリング生成] Error checking and generating next recurrence task:', error);
     }
   }
 
@@ -1169,23 +1561,34 @@ export class TaskService {
       const user = this.authService.currentUser;
       if (!user) throw new Error('User not authenticated');
 
-      // 最後のタスクを取得して日付を計算
-      const q = query(
-        collection(db, 'tasks'),
-        where('parentTaskId', '==', parentTask.id),
-        where('recurrenceInstance', '==', lastInstanceNumber),
-        where('isDeleted', '==', false)
-      );
-      const snapshot = await getDocs(q);
+      let lastStartDate: Date;
+      let lastEndDate: Date;
+      let duration: number;
 
-      if (snapshot.empty) {
-        throw new Error('Last task not found');
+      // lastInstanceNumberが0の場合は親タスクを基準にする
+      if (lastInstanceNumber === 0) {
+        lastStartDate = parentTask.startDate.toDate();
+        lastEndDate = parentTask.endDate.toDate();
+        duration = lastEndDate.getTime() - lastStartDate.getTime();
+      } else {
+        // 最後のタスクを取得して日付を計算
+        const q = query(
+          collection(db, 'tasks'),
+          where('parentTaskId', '==', parentTask.id),
+          where('recurrenceInstance', '==', lastInstanceNumber),
+          where('isDeleted', '==', false)
+        );
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) {
+          throw new Error('Last task not found');
+        }
+
+        const lastTask = snapshot.docs[0].data() as Task;
+        lastStartDate = lastTask.startDate.toDate();
+        lastEndDate = lastTask.endDate.toDate();
+        duration = lastEndDate.getTime() - lastStartDate.getTime();
       }
-
-      const lastTask = snapshot.docs[0].data() as Task;
-      const lastStartDate = lastTask.startDate.toDate();
-      const lastEndDate = lastTask.endDate.toDate();
-      const duration = lastEndDate.getTime() - lastStartDate.getTime();
 
       // 次の日付を計算
       const nextStartDate = new Date(lastStartDate);
@@ -1257,7 +1660,6 @@ export class TaskService {
         workSessions: [],
         totalWorkTime: 0,
         recurrence: parentTask.recurrence,
-        recurrenceEndDate: parentTask.recurrenceEndDate,
         parentTaskId: parentTask.id,
         recurrenceInstance: lastInstanceNumber + 1,
         isRecurrenceParent: false,
@@ -1267,11 +1669,13 @@ export class TaskService {
         updatedAt: Timestamp.now()
       };
 
+      if (parentTask.recurrenceEndDate !== undefined) newTask.recurrenceEndDate = parentTask.recurrenceEndDate;
       if (parentTask.description !== undefined) newTask.description = parentTask.description;
       if (parentTask.projectId !== undefined) newTask.projectId = parentTask.projectId;
       if (parentTask.projectName !== undefined) newTask.projectName = parentTask.projectName;
+      if (parentTask.teamId !== undefined) newTask.teamId = parentTask.teamId;
+      if (parentTask.teamName !== undefined) newTask.teamName = parentTask.teamName;
       if (parentTask.customPriority !== undefined) newTask.customPriority = parentTask.customPriority;
-      if (parentTask.customTaskType !== undefined) newTask.customTaskType = parentTask.customTaskType;
       if (parentTask.memo !== undefined) newTask.memo = parentTask.memo;
 
       const docRef = await addDoc(collection(db, 'tasks'), newTask);
@@ -1377,6 +1781,547 @@ export class TaskService {
     } catch (error: any) {
       console.error('Error getting next task candidates:', error);
       return [];
+    }
+  }
+
+  // 繰り返し設定変更時に削除されるタスクの件数を計算
+  async calculateTasksToDeleteOnRecurrenceChange(
+    taskId: string,
+    newRecurrence: RecurrenceType,
+    newRecurrenceEndDate: Timestamp | undefined,
+    oldRecurrence: RecurrenceType,
+    oldRecurrenceEndDate: Timestamp | undefined
+  ): Promise<number> {
+    try {
+      const task = await this.getTask(taskId);
+      if (!task) return 0;
+
+      // 親タスクの場合、子タスクを取得
+      const q = query(
+        collection(db, 'tasks'),
+        where('parentTaskId', '==', taskId),
+        where('isDeleted', '==', false)
+      );
+      const snapshot = await getDocs(q);
+      const childTasks = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Task));
+
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+
+      let deleteCount = 0;
+
+      // ①繰り返しあり→なし: 現在以降の未着手タスクを完全削除
+      if (oldRecurrence !== RecurrenceType.None && newRecurrence === RecurrenceType.None) {
+        deleteCount = childTasks.filter(child => {
+          // 親タスク自身を除外（parentTaskIdが自分自身に設定されている場合があるため）
+          if (child.id === taskId) return false;
+          if (child.status === TaskStatus.Completed) return false;
+          const endDate = child.endDate.toDate();
+          endDate.setHours(0, 0, 0, 0);
+          return endDate >= now;
+        }).length;
+      }
+      // ③繰り返し周期変更: 現在以降の未着手タスクを完全削除
+      else if (oldRecurrence !== RecurrenceType.None && newRecurrence !== RecurrenceType.None && 
+               oldRecurrence !== newRecurrence) {
+        deleteCount = childTasks.filter(child => {
+          // 親タスク自身を除外（parentTaskIdが自分自身に設定されている場合があるため）
+          if (child.id === taskId) return false;
+          if (child.status === TaskStatus.Completed) return false;
+          const endDate = child.endDate.toDate();
+          endDate.setHours(0, 0, 0, 0);
+          return endDate >= now;
+        }).length;
+      }
+      // ④繰り返し終了日変更: 範囲外のタスクを完全削除
+      else if (oldRecurrence !== RecurrenceType.None && newRecurrence === oldRecurrence && 
+               newRecurrenceEndDate && oldRecurrenceEndDate) {
+        const newEndDate = newRecurrenceEndDate.toDate();
+        newEndDate.setHours(23, 59, 59, 999);
+        
+        deleteCount = childTasks.filter(child => {
+          // 親タスク自身を除外（parentTaskIdが自分自身に設定されている場合があるため）
+          if (child.id === taskId) return false;
+          const childEndDate = child.endDate.toDate();
+          childEndDate.setHours(23, 59, 59, 999);
+          return childEndDate > newEndDate;
+        }).length;
+      }
+
+      return deleteCount;
+    } catch (error: any) {
+      console.error('Error calculating tasks to delete:', error);
+      return 0;
+    }
+  }
+
+  // 繰り返し設定変更を処理するメソッド
+  async updateTaskWithRecurrenceChange(
+    taskId: string,
+    updates: Partial<Task>,
+    oldRecurrence: RecurrenceType,
+    oldRecurrenceEndDate: Timestamp | undefined,
+    newRecurrence: RecurrenceType,
+    newRecurrenceEndDate: Timestamp | undefined
+  ): Promise<void> {
+    try {
+      const task = await this.getTask(taskId);
+      if (!task) throw new Error('Task not found');
+
+      // 通常の更新処理
+      await this.updateTask(taskId, updates);
+
+      // 繰り返し設定の変更を処理
+      // ①繰り返しあり→なし
+      if (oldRecurrence !== RecurrenceType.None && newRecurrence === RecurrenceType.None) {
+        await this.handleRecurrenceRemoved(taskId);
+      }
+      // ②繰り返しなし→あり
+      else if (oldRecurrence === RecurrenceType.None && newRecurrence !== RecurrenceType.None) {
+        await this.handleRecurrenceAdded(taskId, newRecurrence, newRecurrenceEndDate);
+      }
+      // ③繰り返し周期変更
+      else if (oldRecurrence !== RecurrenceType.None && newRecurrence !== RecurrenceType.None && 
+               oldRecurrence !== newRecurrence) {
+        await this.handleRecurrencePeriodChanged(taskId, newRecurrence, newRecurrenceEndDate);
+      }
+      // ④繰り返し終了日変更
+      else if (oldRecurrence !== RecurrenceType.None && newRecurrence === oldRecurrence && 
+               newRecurrenceEndDate && oldRecurrenceEndDate &&
+               newRecurrenceEndDate.toMillis() !== oldRecurrenceEndDate.toMillis()) {
+        await this.handleRecurrenceEndDateChanged(taskId, newRecurrenceEndDate);
+      }
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  }
+
+  // 繰り返しあり→なしの処理
+  private async handleRecurrenceRemoved(taskId: string): Promise<void> {
+    const q = query(
+      collection(db, 'tasks'),
+      where('parentTaskId', '==', taskId),
+      where('isDeleted', '==', false)
+    );
+    const snapshot = await getDocs(q);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    for (const doc of snapshot.docs) {
+      const childTask = { id: doc.id, ...doc.data() } as Task;
+      
+      // 親タスク自身を除外（parentTaskIdが自分自身に設定されている場合があるため）
+      if (childTask.id === taskId) {
+        continue;
+      }
+      
+      // 現在以降の未着手タスクを完全削除
+      if (childTask.status !== TaskStatus.Completed) {
+        const endDate = childTask.endDate.toDate();
+        endDate.setHours(0, 0, 0, 0);
+        if (endDate >= now) {
+          await deleteDoc(doc.ref);
+        }
+      }
+    }
+
+    // 親タスクの繰り返し設定をクリア
+    await updateDoc(doc(db, 'tasks', taskId), {
+      recurrence: RecurrenceType.None,
+      recurrenceEndDate: deleteField(),
+      parentTaskId: deleteField(),
+      recurrenceInstance: deleteField(),
+      isRecurrenceParent: false
+    });
+  }
+
+  // 繰り返しなし→ありの処理
+  private async handleRecurrenceAdded(
+    taskId: string,
+    newRecurrence: RecurrenceType,
+    newRecurrenceEndDate: Timestamp | undefined
+  ): Promise<void> {
+    const task = await this.getTask(taskId);
+    if (!task) return;
+
+    // 親タスクとして設定
+    const updateData: any = {
+      recurrence: newRecurrence,
+      parentTaskId: taskId,
+      recurrenceInstance: 0,
+      isRecurrenceParent: true
+    };
+    if (newRecurrenceEndDate !== undefined) {
+      updateData.recurrenceEndDate = newRecurrenceEndDate;
+    } else {
+      updateData.recurrenceEndDate = deleteField();
+    }
+    await updateDoc(doc(db, 'tasks', taskId), updateData);
+
+    // 以降のタスクを自動生成（親タスクを基準に）
+    const updatedTask = await this.getTask(taskId);
+    if (updatedTask) {
+      await this.generateRecurrenceTasksFromParent(updatedTask);
+    }
+  }
+
+  // 親タスクを基準に繰り返しタスクを生成（繰り返しなしから繰り返しありに変更した場合用）
+  private async generateRecurrenceTasksFromParent(parentTask: Task): Promise<void> {
+    try {
+      if (parentTask.recurrence === RecurrenceType.None) {
+        return;
+      }
+
+      const user = this.authService.currentUser;
+      if (!user) throw new Error('User not authenticated');
+
+      const startDate = parentTask.startDate.toDate();
+      const endDate = parentTask.endDate.toDate();
+      const duration = endDate.getTime() - startDate.getTime(); // タスクの期間（ミリ秒）
+
+      // 現在日時を取得（今日の0時0分0秒）
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+
+      // 繰り返し終了日を決定
+      let recurrenceEndDate: Date;
+      const maxPeriod = this.getMaxRecurrencePeriod(parentTask.recurrence);
+      const maxEndDate = new Date(startDate);
+      maxEndDate.setMonth(maxEndDate.getMonth() + maxPeriod);
+
+      if (parentTask.recurrenceEndDate) {
+        recurrenceEndDate = parentTask.recurrenceEndDate.toDate();
+        // 最大期間を超えているかチェック（日付レベルで比較）
+        const recurrenceEndDateOnly = new Date(recurrenceEndDate.getFullYear(), recurrenceEndDate.getMonth(), recurrenceEndDate.getDate());
+        const maxEndDateOnly = new Date(maxEndDate.getFullYear(), maxEndDate.getMonth(), maxEndDate.getDate());
+        if (recurrenceEndDateOnly > maxEndDateOnly) {
+          throw new Error(`繰り返し終了日が最大生成期間（${maxPeriod}か月）を超えています。`);
+        }
+      } else {
+        // 繰り返し終了日が未設定の場合は最大期間で生成
+        recurrenceEndDate = maxEndDate;
+      }
+
+      const generatedTaskIds: string[] = [];
+      // 親タスクの開始日から次のタスクを生成（親タスクと同じ日付をスキップ）
+      let currentStartDate = new Date(startDate);
+      let instanceNumber = 1; // 最初のタスクは親なので、次から1
+
+      // 最初の日付を1回進める（親タスクと同じ日付をスキップ）
+      switch (parentTask.recurrence) {
+        case RecurrenceType.Daily:
+          currentStartDate.setDate(currentStartDate.getDate() + 1);
+          break;
+        case RecurrenceType.Weekly:
+          currentStartDate.setDate(currentStartDate.getDate() + 7);
+          break;
+        case RecurrenceType.Biweekly:
+          currentStartDate.setDate(currentStartDate.getDate() + 14);
+          break;
+        case RecurrenceType.Monthly:
+          const nextMonth = new Date(currentStartDate);
+          nextMonth.setMonth(nextMonth.getMonth() + 1);
+          if (nextMonth.getDate() !== currentStartDate.getDate()) {
+            nextMonth.setDate(0);
+          }
+          currentStartDate = nextMonth;
+          break;
+        case RecurrenceType.Yearly:
+          currentStartDate.setFullYear(currentStartDate.getFullYear() + 1);
+          if (currentStartDate.getMonth() === 1 && currentStartDate.getDate() === 29) {
+            const year = currentStartDate.getFullYear();
+            const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+            if (!isLeapYear) {
+              currentStartDate.setDate(28);
+            }
+          }
+          break;
+      }
+
+      // 日付計算ループ（タスク作成時と同じロジック）
+      while (currentStartDate <= recurrenceEndDate) {
+        const currentEndDate = new Date(currentStartDate.getTime() + duration);
+        const currentStartDateOnly = new Date(currentStartDate.getFullYear(), currentStartDate.getMonth(), currentStartDate.getDate());
+
+        // 現在日時より後のタスクのみを生成
+        if (currentStartDateOnly < now) {
+          // 現在日時より前の場合はスキップして次の日付へ
+          switch (parentTask.recurrence) {
+            case RecurrenceType.Daily:
+              currentStartDate.setDate(currentStartDate.getDate() + 1);
+              break;
+            case RecurrenceType.Weekly:
+              currentStartDate.setDate(currentStartDate.getDate() + 7);
+              break;
+            case RecurrenceType.Biweekly:
+              currentStartDate.setDate(currentStartDate.getDate() + 14);
+              break;
+            case RecurrenceType.Monthly:
+              const nextMonth = new Date(currentStartDate);
+              nextMonth.setMonth(nextMonth.getMonth() + 1);
+              if (nextMonth.getDate() !== currentStartDate.getDate()) {
+                nextMonth.setDate(0);
+              }
+              currentStartDate = nextMonth;
+              break;
+            case RecurrenceType.Yearly:
+              currentStartDate.setFullYear(currentStartDate.getFullYear() + 1);
+              if (currentStartDate.getMonth() === 1 && currentStartDate.getDate() === 29) {
+                const year = currentStartDate.getFullYear();
+                const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+                if (!isLeapYear) {
+                  currentStartDate.setDate(28);
+                }
+              }
+              break;
+          }
+          instanceNumber++;
+          continue;
+        }
+
+        // 繰り返し終了日を超えないようにチェック
+        if (currentStartDate > recurrenceEndDate) {
+          break;
+        }
+
+        // 次のタスクを作成
+        const recurringTask: any = {
+          title: parentTask.title,
+          assigneeId: parentTask.assigneeId || '',
+          assigneeName: parentTask.assigneeName || '',
+          creatorId: parentTask.creatorId,
+          creatorName: parentTask.creatorName,
+          status: TaskStatus.NotStarted,
+          startDate: Timestamp.fromDate(new Date(currentStartDate)),
+          endDate: Timestamp.fromDate(new Date(currentEndDate)),
+          priority: parentTask.priority,
+          taskType: parentTask.taskType,
+          subtasks: (parentTask.subtasks || []).map(subtask => ({
+            ...subtask,
+            completed: false // サブタスクは未完了にする
+          })),
+          progress: 0,
+          showProgress: parentTask.showProgress !== undefined ? parentTask.showProgress : true,
+          progressManual: false,
+          reminders: (parentTask.reminders || []).map(reminder => ({
+            ...reminder,
+            id: Date.now().toString() + Math.random().toString(36).substring(2, 11),
+            sent: false // リマインダーは未送信にする
+          })),
+          comments: [],
+          workSessions: [],
+          totalWorkTime: 0,
+          recurrence: parentTask.recurrence,
+          parentTaskId: parentTask.id,
+          recurrenceInstance: instanceNumber,
+          isRecurrenceParent: false,
+          files: [], // ファイルは複製しない
+          isDeleted: false,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        };
+
+        // undefinedでないフィールドのみ追加
+        if (parentTask.recurrenceEndDate !== undefined) recurringTask.recurrenceEndDate = parentTask.recurrenceEndDate;
+        if (parentTask.description !== undefined) recurringTask.description = parentTask.description;
+        if (parentTask.projectId !== undefined) recurringTask.projectId = parentTask.projectId;
+        if (parentTask.projectName !== undefined) recurringTask.projectName = parentTask.projectName;
+        if (parentTask.teamId !== undefined) recurringTask.teamId = parentTask.teamId;
+        if (parentTask.teamName !== undefined) recurringTask.teamName = parentTask.teamName;
+        if (parentTask.customPriority !== undefined) recurringTask.customPriority = parentTask.customPriority;
+        if (parentTask.memo !== undefined) recurringTask.memo = parentTask.memo;
+
+        const docRef = await addDoc(collection(db, 'tasks'), recurringTask);
+        generatedTaskIds.push(docRef.id);
+
+        // 通知を送信（親タスクと同じ通知ロジック）
+        await this.sendTaskCreatedNotifications(docRef.id, recurringTask);
+
+        // 次の日付を計算
+        switch (parentTask.recurrence) {
+          case RecurrenceType.Daily:
+            currentStartDate.setDate(currentStartDate.getDate() + 1);
+            break;
+          case RecurrenceType.Weekly:
+            currentStartDate.setDate(currentStartDate.getDate() + 7);
+            break;
+          case RecurrenceType.Biweekly:
+            currentStartDate.setDate(currentStartDate.getDate() + 14);
+            break;
+          case RecurrenceType.Monthly:
+            // 月末の場合は調整（例: 1/31 → 2/28 → 3/31）
+            const nextMonth = new Date(currentStartDate);
+            nextMonth.setMonth(nextMonth.getMonth() + 1);
+            // 同じ日付が存在しない場合は、月末に調整
+            if (nextMonth.getDate() !== currentStartDate.getDate()) {
+              nextMonth.setDate(0); // 前月の最終日
+            }
+            currentStartDate = nextMonth;
+            break;
+          case RecurrenceType.Yearly:
+            currentStartDate.setFullYear(currentStartDate.getFullYear() + 1);
+            // うるう年対応（2/29の場合）
+            if (currentStartDate.getMonth() === 1 && currentStartDate.getDate() === 29) {
+              const year = currentStartDate.getFullYear();
+              const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+              if (!isLeapYear) {
+                currentStartDate.setDate(28); // うるう年でない場合は2/28に
+              }
+            }
+            break;
+        }
+
+        instanceNumber++;
+      }
+
+      return;
+    } catch (error: any) {
+      console.error('Error generating recurrence tasks from parent:', error);
+      throw error;
+    }
+  }
+
+  // 繰り返し周期変更の処理
+  private async handleRecurrencePeriodChanged(
+    taskId: string,
+    newRecurrence: RecurrenceType,
+    newRecurrenceEndDate: Timestamp | undefined
+  ): Promise<void> {
+    const task = await this.getTask(taskId);
+    if (!task) return;
+
+    // 現在以降の未着手タスクを完全削除
+    const q = query(
+      collection(db, 'tasks'),
+      where('parentTaskId', '==', taskId),
+      where('isDeleted', '==', false)
+    );
+    const snapshot = await getDocs(q);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    for (const doc of snapshot.docs) {
+      const childTask = { id: doc.id, ...doc.data() } as Task;
+      
+      // 親タスク自身を除外（parentTaskIdが自分自身に設定されている場合があるため）
+      if (childTask.id === taskId) {
+        continue;
+      }
+      
+      if (childTask.status !== TaskStatus.Completed) {
+        const endDate = childTask.endDate.toDate();
+        endDate.setHours(0, 0, 0, 0);
+        if (endDate >= now) {
+          await deleteDoc(doc.ref);
+        }
+      }
+    }
+
+    // 親タスクの繰り返し設定を更新
+    const updateData: any = {
+      recurrence: newRecurrence
+    };
+    if (newRecurrenceEndDate !== undefined) {
+      updateData.recurrenceEndDate = newRecurrenceEndDate;
+    } else {
+      updateData.recurrenceEndDate = deleteField();
+    }
+    await updateDoc(doc(db, 'tasks', taskId), updateData);
+
+    // 以降のタスクを自動生成（新しい間隔で複数のタスクを生成）
+    const updatedTask = await this.getTask(taskId);
+    if (updatedTask) {
+      await this.generateRecurrenceTasksFromParent(updatedTask);
+    }
+  }
+
+  // 繰り返し終了日変更の処理
+  private async handleRecurrenceEndDateChanged(
+    taskId: string,
+    newRecurrenceEndDate: Timestamp
+  ): Promise<void> {
+    const task = await this.getTask(taskId);
+    if (!task) return;
+
+    // 範囲外のタスクを完全削除
+    const q = query(
+      collection(db, 'tasks'),
+      where('parentTaskId', '==', taskId),
+      where('isDeleted', '==', false)
+    );
+    const snapshot = await getDocs(q);
+    const newEndDate = newRecurrenceEndDate.toDate();
+    newEndDate.setHours(23, 59, 59, 999);
+
+    for (const doc of snapshot.docs) {
+      const childTask = { id: doc.id, ...doc.data() } as Task;
+      
+      // 親タスク自身を除外（parentTaskIdが自分自身に設定されている場合があるため）
+      if (childTask.id === taskId) {
+        continue;
+      }
+      
+      const childEndDate = childTask.endDate.toDate();
+      childEndDate.setHours(23, 59, 59, 999);
+      if (childEndDate > newEndDate) {
+        await deleteDoc(doc.ref);
+      }
+    }
+
+    // 親タスクの繰り返し終了日を更新
+    await updateDoc(doc(db, 'tasks', taskId), {
+      recurrenceEndDate: newRecurrenceEndDate
+    });
+  }
+
+  // 親タスク削除時の処理（子タスクを完全削除）
+  async permanentlyDeleteChildTasks(parentTaskId: string): Promise<void> {
+    try {
+      const q = query(
+        collection(db, 'tasks'),
+        where('parentTaskId', '==', parentTaskId),
+        where('isDeleted', '==', false)
+      );
+      const snapshot = await getDocs(q);
+
+      for (const doc of snapshot.docs) {
+        await deleteDoc(doc.ref);
+      }
+    } catch (error: any) {
+      console.error('Error permanently deleting child tasks:', error);
+      throw new Error('子タスクの削除に失敗しました: ' + error.message);
+    }
+  }
+
+  // 今日以降の繰り返しタスクの数を取得
+  async getFutureRecurrenceTasksCount(parentTaskId: string): Promise<number> {
+    try {
+      const q = query(
+        collection(db, 'tasks'),
+        where('parentTaskId', '==', parentTaskId),
+        where('isDeleted', '==', false)
+      );
+      const snapshot = await getDocs(q);
+      
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      
+      let count = 0;
+      for (const doc of snapshot.docs) {
+        const childTask = { id: doc.id, ...doc.data() } as Task;
+        const endDate = childTask.endDate.toDate();
+        endDate.setHours(0, 0, 0, 0);
+        if (endDate >= now) {
+          count++;
+        }
+      }
+      return count;
+    } catch (error: any) {
+      console.error('Error getting future recurrence tasks count:', error);
+      return 0;
     }
   }
 }

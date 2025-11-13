@@ -2,6 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { Location } from '@angular/common';
 import { ThemeService, ThemeMode } from '../../services/theme.service';
 import { AuthService } from '../../services/auth.service';
 import { NotificationPreferences } from '../../models/user.model';
@@ -19,6 +20,7 @@ export class SettingsComponent implements OnInit {
   themeService = inject(ThemeService);
   authService = inject(AuthService);
   router = inject(Router);
+  location = inject(Location);
   
   currentTheme: ThemeMode = 'light';
   notificationSettings: NotificationPreferences = {
@@ -37,14 +39,15 @@ export class SettingsComponent implements OnInit {
     projectDeleted: true,
     projectRestored: true,
     projectCompleted: true,
+    projectMemberAdded: true,
+    projectMemberRemoved: true,
     taskOverdue: true,
     taskReminder: true,
     startDateOverdue: true,
     endDateOverdue: true,
     teamInvitation: true,
     teamLeave: true,
-    teamPermissionChange: true,
-    teamAdminAnnouncement: true
+    teamPermissionChange: true
   };
   isLoading = false;
   showNextTasks: boolean = true; // デフォルト値
@@ -108,18 +111,20 @@ export class SettingsComponent implements OnInit {
       this.notificationSettings.projectDeleted = value;
       this.notificationSettings.projectRestored = value;
       this.notificationSettings.projectCompleted = value;
+      this.notificationSettings.projectMemberAdded = value;
+      this.notificationSettings.projectMemberRemoved = value;
       // WebPush通知の個別設定
       this.notificationSettings.projectCreatedWebPush = value;
       this.notificationSettings.projectUpdatedWebPush = value;
       this.notificationSettings.projectDeletedWebPush = value;
       this.notificationSettings.projectRestoredWebPush = value;
       this.notificationSettings.projectCompletedWebPush = value;
+      this.notificationSettings.projectMemberAddedWebPush = value;
+      this.notificationSettings.projectMemberRemovedWebPush = value;
     } else if (category === 'reminder') {
       // お知らせ通知の個別設定
-      this.notificationSettings.taskOverdue = value;
       this.notificationSettings.taskReminder = value;
       // WebPush通知の個別設定
-      this.notificationSettings.taskOverdueWebPush = value;
       this.notificationSettings.taskReminderWebPush = value;
     } else if (category === 'dateCheck') {
       // お知らせ通知の個別設定
@@ -135,14 +140,12 @@ export class SettingsComponent implements OnInit {
       this.notificationSettings.teamInvitationRejected = value;
       this.notificationSettings.teamLeave = value;
       this.notificationSettings.teamPermissionChange = value;
-      this.notificationSettings.teamAdminAnnouncement = value;
       // WebPush通知の個別設定
       this.notificationSettings.teamInvitationWebPush = value;
       this.notificationSettings.teamInvitationAcceptedWebPush = value;
       this.notificationSettings.teamInvitationRejectedWebPush = value;
       this.notificationSettings.teamLeaveWebPush = value;
       this.notificationSettings.teamPermissionChangeWebPush = value;
-      this.notificationSettings.teamAdminAnnouncementWebPush = value;
     }
     await this.saveNotificationSettings();
   }
@@ -165,8 +168,9 @@ export class SettingsComponent implements OnInit {
       this.notificationSettings.projectDeletedWebPush = value;
       this.notificationSettings.projectRestoredWebPush = value;
       this.notificationSettings.projectCompletedWebPush = value;
+      this.notificationSettings.projectMemberAddedWebPush = value;
+      this.notificationSettings.projectMemberRemovedWebPush = value;
     } else if (category === 'reminder') {
-      this.notificationSettings.taskOverdueWebPush = value;
       this.notificationSettings.taskReminderWebPush = value;
     } else if (category === 'dateCheck') {
       this.notificationSettings.startDateOverdueWebPush = value;
@@ -177,7 +181,6 @@ export class SettingsComponent implements OnInit {
       this.notificationSettings.teamInvitationRejectedWebPush = value;
       this.notificationSettings.teamLeaveWebPush = value;
       this.notificationSettings.teamPermissionChangeWebPush = value;
-      this.notificationSettings.teamAdminAnnouncementWebPush = value;
     }
     await this.saveNotificationSettings();
   }
@@ -192,15 +195,16 @@ export class SettingsComponent implements OnInit {
         this.notificationSettings.taskWebPush = true;
       } else if (settingKey === 'projectCreatedWebPush' || settingKey === 'projectUpdatedWebPush' ||
                  settingKey === 'projectDeletedWebPush' || settingKey === 'projectRestoredWebPush' ||
-                 settingKey === 'projectCompletedWebPush') {
+                 settingKey === 'projectCompletedWebPush' ||
+                 settingKey === 'projectMemberAddedWebPush' || settingKey === 'projectMemberRemovedWebPush') {
         this.notificationSettings.projectWebPush = true;
-      } else if (settingKey === 'taskOverdueWebPush' || settingKey === 'taskReminderWebPush') {
+      } else if (settingKey === 'taskReminderWebPush') {
         this.notificationSettings.reminderWebPush = true;
       } else if (settingKey === 'startDateOverdueWebPush' || settingKey === 'endDateOverdueWebPush') {
         this.notificationSettings.dateCheckWebPush = true;
       } else if (settingKey === 'teamInvitationWebPush' || settingKey === 'teamInvitationAcceptedWebPush' ||
                  settingKey === 'teamInvitationRejectedWebPush' || settingKey === 'teamLeaveWebPush' || 
-                 settingKey === 'teamPermissionChangeWebPush' || settingKey === 'teamAdminAnnouncementWebPush') {
+                 settingKey === 'teamPermissionChangeWebPush') {
         this.notificationSettings.teamWebPush = true;
       }
     }
@@ -216,15 +220,16 @@ export class SettingsComponent implements OnInit {
         this.notificationSettings.task = true;
       } else if (settingKey === 'projectCreated' || settingKey === 'projectUpdated' ||
                  settingKey === 'projectDeleted' || settingKey === 'projectRestored' ||
-                 settingKey === 'projectCompleted') {
+                 settingKey === 'projectCompleted' ||
+                 settingKey === 'projectMemberAdded' || settingKey === 'projectMemberRemoved') {
         this.notificationSettings.project = true;
-      } else if (settingKey === 'taskOverdue' || settingKey === 'taskReminder') {
+      } else if (settingKey === 'taskReminder') {
         this.notificationSettings.reminder = true;
       } else if (settingKey === 'startDateOverdue' || settingKey === 'endDateOverdue') {
         this.notificationSettings.dateCheck = true;
       } else if (settingKey === 'teamInvitation' || settingKey === 'teamInvitationAccepted' || 
                  settingKey === 'teamInvitationRejected' || settingKey === 'teamLeave' || 
-                 settingKey === 'teamPermissionChange' || settingKey === 'teamAdminAnnouncement') {
+                 settingKey === 'teamPermissionChange') {
         this.notificationSettings.team = true;
       }
     }
@@ -248,8 +253,9 @@ export class SettingsComponent implements OnInit {
       this.notificationSettings.projectDeleted = value;
       this.notificationSettings.projectRestored = value;
       this.notificationSettings.projectCompleted = value;
+      this.notificationSettings.projectMemberAdded = value;
+      this.notificationSettings.projectMemberRemoved = value;
     } else if (category === 'reminder') {
-      this.notificationSettings.taskOverdue = value;
       this.notificationSettings.taskReminder = value;
     } else if (category === 'dateCheck') {
       this.notificationSettings.startDateOverdue = value;
@@ -260,7 +266,6 @@ export class SettingsComponent implements OnInit {
       this.notificationSettings.teamInvitationRejected = value;
       this.notificationSettings.teamLeave = value;
       this.notificationSettings.teamPermissionChange = value;
-      this.notificationSettings.teamAdminAnnouncement = value;
     }
     await this.saveNotificationSettings();
   }
@@ -313,7 +318,11 @@ export class SettingsComponent implements OnInit {
   }
 
   goBack() {
-    this.router.navigate(['/home']);
+    if (window.history.length > 1) {
+      this.location.back();
+    } else {
+      this.router.navigate(['/home']);
+    }
   }
 }
 

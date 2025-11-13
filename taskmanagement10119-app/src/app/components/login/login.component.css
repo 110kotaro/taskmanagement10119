@@ -3,14 +3,14 @@
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: transparent;
 }
 
 .login-card {
-  background: white;
+  background: var(--color-surface);
   padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-lg);
   width: 100%;
   max-width: 400px;
 }
@@ -18,7 +18,7 @@
 h1 {
   text-align: center;
   margin-bottom: 2rem;
-  color: #333;
+  color: var(--color-text);
 }
 
 .form-group {
@@ -28,38 +28,40 @@ h1 {
 label {
   display: block;
   margin-bottom: 0.5rem;
-  color: #555;
+  color: var(--color-text);
   font-weight: 500;
 }
 
 input {
   width: 100%;
   padding: 0.75rem;
-  border: 2px solid #e0e0e0;
-  border-radius: 6px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
   font-size: 1rem;
   transition: border-color 0.3s;
   box-sizing: border-box;
+  background: var(--color-background);
+  color: var(--color-text);
 }
 
 input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--color-primary);
 }
 
 .error {
-  color: #e74c3c;
-  font-size: 0.875rem;
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
   margin-top: 0.5rem;
 }
 
 button {
   width: 100%;
   padding: 0.875rem;
-  background: #667eea;
+  background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
@@ -67,26 +69,28 @@ button {
 }
 
 button:hover:not(:disabled) {
-  background: #5568d3;
+  background: var(--color-primary-dark);
 }
 
 button:disabled {
-  background: #ccc;
+  background: var(--color-text-secondary);
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
 .toggle {
   text-align: center;
   margin-top: 1.5rem;
+  color: var(--color-text);
 }
 
 .toggle a {
-  color: #667eea;
+  color: var(--color-primary);
   cursor: pointer;
   text-decoration: underline;
 }
 
 .toggle a:hover {
-  color: #5568d3;
+  color: var(--color-primary-dark);
 }
 

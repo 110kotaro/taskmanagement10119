@@ -1,4 +1,4 @@
-<div class="app-container" [class.sidebar-closed]="!isSidebarOpen" *ngIf="isLoggedIn && authInitialized">
+<div class="app-container" [class.sidebar-closed]="!isSidebarOpen" *ngIf="isLoggedIn && authInitialized && !isTeamInvitationPage">
   <!-- サイドバーが閉じたときのトグルボタン（左端に固定） -->
   <button 
     *ngIf="!isSidebarOpen"
@@ -11,7 +11,7 @@
   <!-- サイドバー -->
   <aside class="sidebar" [class.open]="isSidebarOpen" [class.closed]="!isSidebarOpen">
     <div class="sidebar-header">
-      <h2>タスク管理</h2>
+      <h2>タスク管理アプリ</h2>
       <button class="sidebar-toggle" (click)="toggleSidebar()" title="サイドバーを閉じる">
         ←
       </button>
@@ -37,12 +37,6 @@
       </button>
       <button 
         class="nav-item" 
-        [class.active]="isActiveRoute('/teams')"
-        (click)="viewTeams()">
-        👥 チーム管理
-      </button>
-      <button 
-        class="nav-item" 
         [class.active]="isActiveRoute('/gantt')"
         (click)="viewGantt()">
         📊 ガントチャート
@@ -54,10 +48,11 @@
         📈 統計
       </button>
       <button 
-        class="nav-item" 
+        class="nav-item comments-item" 
         [class.active]="isActiveRoute('/comments')"
         (click)="viewComments()">
-        💬 コメント一覧
+        <span>💬 コメント一覧</span>
+        <span class="badge" *ngIf="unreadCommentTaskCount > 0">{{ unreadCommentTaskCount }}</span>
       </button>
       <button 
         class="nav-item notifications-item" 
@@ -68,15 +63,15 @@
       </button>
       <button 
         class="nav-item" 
-        [class.active]="isActiveRoute('/task-import')"
-        (click)="viewTaskImport()">
-        📥 タスクインポート
+        [class.active]="isActiveRoute('/archive')"
+        (click)="viewArchive()">
+        📦 アーカイブ（削除、完了済み）
       </button>
       <button 
         class="nav-item" 
-        [class.active]="isActiveRoute('/archive')"
-        (click)="viewArchive()">
-        📦 アーカイブ
+        [class.active]="isActiveRoute('/teams')"
+        (click)="viewTeams()">
+        👥 チーム管理
       </button>
       <button 
         class="nav-item" 
@@ -89,6 +84,12 @@
         [class.active]="isActiveRoute('/account')"
         (click)="viewAccount()">
         👤 アカウント情報
+      </button>
+      <button 
+        class="nav-item" 
+        [class.active]="isActiveRoute('/task-import')"
+        (click)="viewTaskImport()">
+        📥 タスクインポート
       </button>
       
       <!-- 個人/チーム切り替え -->
@@ -124,8 +125,8 @@
   </main>
 </div>
 
-<!-- ログイン画面ではサイドバーを表示しない -->
-<div class="app-container" *ngIf="!isLoggedIn && authInitialized">
+<!-- ログイン画面と招待リンクページではサイドバーを表示しない -->
+<div class="app-container login-container-wrapper" *ngIf="(!isLoggedIn || isTeamInvitationPage) && authInitialized">
   <router-outlet />
 </div>
 

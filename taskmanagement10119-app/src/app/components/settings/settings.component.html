@@ -64,7 +64,7 @@
               <span class="notification-icon">📋</span>
               <div class="notification-option-content">
                 <span class="notification-option-title">タスク関連</span>
-                <span class="notification-option-description">タスク更新、割り当て、作成、削除、復元、完了</span>
+                <span class="notification-option-description">タスク作成、更新、削除、復元、完了</span>
               </div>
               <span class="expand-icon">{{ expandedCategories['task'] ? '▼' : '▶' }}</span>
             </div>
@@ -94,7 +94,7 @@
                     type="checkbox" 
                     [checked]="notificationSettings['taskUpdated']"
                     (change)="onIndividualSettingChange('taskUpdated', $any($event.target).checked)">
-                  <span>タスク更新（ステータス変更、割り当て）</span>
+                  <span>タスク更新（ステータス変更など）</span>
                 </label>
                 <label class="notification-individual-option">
                   <input 
@@ -144,7 +144,7 @@
                     type="checkbox" 
                     [checked]="notificationSettings['taskUpdatedWebPush'] !== false"
                     (change)="onWebPushIndividualSettingChange('taskUpdatedWebPush', $any($event.target).checked)">
-                  <span>タスク更新</span>
+                  <span>タスク更新（ステータス変更など）</span>
                 </label>
                 <label class="notification-individual-option">
                   <input 
@@ -238,6 +238,20 @@
                     (change)="onIndividualSettingChange('projectCompleted', $any($event.target).checked)">
                   <span>プロジェクト完了</span>
                 </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['projectMemberAdded']"
+                    (change)="onIndividualSettingChange('projectMemberAdded', $any($event.target).checked)">
+                  <span>プロジェクトメンバー追加</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['projectMemberRemoved']"
+                    (change)="onIndividualSettingChange('projectMemberRemoved', $any($event.target).checked)">
+                  <span>プロジェクトメンバー削除</span>
+                </label>
               </div>
             </div>
             
@@ -288,6 +302,20 @@
                     (change)="onWebPushIndividualSettingChange('projectCompletedWebPush', $any($event.target).checked)">
                   <span>プロジェクト完了</span>
                 </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['projectMemberAddedWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('projectMemberAddedWebPush', $any($event.target).checked)">
+                  <span>プロジェクトメンバー追加</span>
+                </label>
+                <label class="notification-individual-option">
+                  <input 
+                    type="checkbox" 
+                    [checked]="notificationSettings['projectMemberRemovedWebPush'] !== false"
+                    (change)="onWebPushIndividualSettingChange('projectMemberRemovedWebPush', $any($event.target).checked)">
+                  <span>プロジェクトメンバー削除</span>
+                </label>
               </div>
             </div>
           </div>
@@ -306,7 +334,7 @@
               <span class="notification-icon">🔔</span>
               <div class="notification-option-content">
                 <span class="notification-option-title">リマインダー</span>
-                <span class="notification-option-description">担当タスク、作成タスク、所属プロジェクト</span>
+                <span class="notification-option-description">リマインダー</span>
               </div>
               <span class="expand-icon">{{ expandedCategories['reminder'] ? '▼' : '▶' }}</span>
             </div>
@@ -327,16 +355,9 @@
                 <label class="notification-individual-option">
                   <input 
                     type="checkbox" 
-                    [checked]="notificationSettings['taskOverdue']"
-                    (change)="onIndividualSettingChange('taskOverdue', $any($event.target).checked)">
-                  <span>担当タスク（期限切れ）</span>
-                </label>
-                <label class="notification-individual-option">
-                  <input 
-                    type="checkbox" 
                     [checked]="notificationSettings['taskReminder']"
                     (change)="onIndividualSettingChange('taskReminder', $any($event.target).checked)">
-                  <span>リマインダー（作成タスク、所属プロジェクト）</span>
+                  <span>リマインダー（作成タスク、担当タスク）</span>
                 </label>
               </div>
             </div>
@@ -356,16 +377,9 @@
                 <label class="notification-individual-option">
                   <input 
                     type="checkbox" 
-                    [checked]="notificationSettings['taskOverdueWebPush'] !== false"
-                    (change)="onWebPushIndividualSettingChange('taskOverdueWebPush', $any($event.target).checked)">
-                  <span>担当タスク（期限切れ）</span>
-                </label>
-                <label class="notification-individual-option">
-                  <input 
-                    type="checkbox" 
                     [checked]="notificationSettings['taskReminderWebPush'] !== false"
                     (change)="onWebPushIndividualSettingChange('taskReminderWebPush', $any($event.target).checked)">
-                  <span>リマインダー（作成タスク、所属プロジェクト）</span>
+                  <span>リマインダー（作成タスク、担当タスク）</span>
                 </label>
               </div>
             </div>
@@ -464,7 +478,7 @@
               <span class="notification-icon">👥</span>
               <div class="notification-option-content">
                 <span class="notification-option-title">チーム</span>
-                <span class="notification-option-description">チーム招待、退会、権限変更、管理者からのお知らせ</span>
+                <span class="notification-option-description">チーム招待、退会、権限変更</span>
               </div>
               <span class="expand-icon">{{ expandedCategories['team'] ? '▼' : '▶' }}</span>
             </div>
@@ -517,13 +531,6 @@
                     (change)="onIndividualSettingChange('teamPermissionChange', $any($event.target).checked)">
                   <span>権限変更</span>
                 </label>
-                <label class="notification-individual-option">
-                  <input 
-                    type="checkbox" 
-                    [checked]="notificationSettings['teamAdminAnnouncement']"
-                    (change)="onIndividualSettingChange('teamAdminAnnouncement', $any($event.target).checked)">
-                  <span>管理者からのお知らせ</span>
-                </label>
               </div>
             </div>
             
@@ -573,13 +580,6 @@
                     [checked]="notificationSettings['teamPermissionChangeWebPush'] !== false"
                     (change)="onWebPushIndividualSettingChange('teamPermissionChangeWebPush', $any($event.target).checked)">
                   <span>権限変更</span>
-                </label>
-                <label class="notification-individual-option">
-                  <input 
-                    type="checkbox" 
-                    [checked]="notificationSettings['teamAdminAnnouncementWebPush'] !== false"
-                    (change)="onWebPushIndividualSettingChange('teamAdminAnnouncementWebPush', $any($event.target).checked)">
-                  <span>管理者からのお知らせ</span>
                 </label>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import { Timestamp } from 'firebase/firestore';
+import { Comment } from './task.model';
 
 export enum ProjectRole {
   Owner = 'owner',
@@ -49,6 +50,7 @@ export interface Project {
     url: string;
     uploadedAt: Timestamp;
   }>;
+  comments?: Comment[]; // コメント一覧
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

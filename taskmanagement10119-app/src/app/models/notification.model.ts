@@ -14,6 +14,9 @@ export enum NotificationType {
   ProjectDeleted = 'project_deleted',
   ProjectRestored = 'project_restored',
   ProjectCompleted = 'project_completed',
+  ProjectMemberAdded = 'project_member_added',
+  ProjectMemberRemoved = 'project_member_removed',
+  ProjectMemberRoleChanged = 'project_member_role_changed',
   TeamInvitation = 'team_invitation',
   TeamInvitationAccepted = 'team_invitation_accepted',
   TeamInvitationRejected = 'team_invitation_rejected',
@@ -32,7 +35,7 @@ export interface Notification {
   projectId?: string;
   teamId?: string;
   invitationId?: string; // チーム招待ID
-  checkType?: 'startDate' | 'endDate'; // 日付チェックの種類（TaskOverdue通知用）
+  checkType?: 'startDate' | 'endDate' | 'completion' | 'projectEndDate'; // 日付チェックの種類（TaskOverdue/Project日付チェック通知用）
   isRead: boolean;
   readAt?: Timestamp;
   createdAt: Timestamp;
@@ -41,7 +44,7 @@ export interface Notification {
 }
 
 // 通知タイプからカテゴリを取得する関数
-export function getNotificationCategory(type: NotificationType, checkType?: 'startDate' | 'endDate'): 'task' | 'project' | 'reminder' | 'team' | 'dateCheck' {
+export function getNotificationCategory(type: NotificationType, checkType?: 'startDate' | 'endDate' | 'completion' | 'projectEndDate'): 'task' | 'project' | 'reminder' | 'team' | 'dateCheck' {
   switch (type) {
     case NotificationType.TaskCreated:
     case NotificationType.TaskUpdated:
@@ -63,6 +66,9 @@ export function getNotificationCategory(type: NotificationType, checkType?: 'sta
     case NotificationType.ProjectDeleted:
     case NotificationType.ProjectRestored:
     case NotificationType.ProjectCompleted:
+    case NotificationType.ProjectMemberAdded:
+    case NotificationType.ProjectMemberRemoved:
+    case NotificationType.ProjectMemberRoleChanged:
       return 'project';
     case NotificationType.TeamInvitation:
     case NotificationType.TeamInvitationAccepted:
@@ -77,7 +83,7 @@ export function getNotificationCategory(type: NotificationType, checkType?: 'sta
 }
 
 // 通知タイプから個別設定のキーを取得する関数
-export function getNotificationSettingKey(type: NotificationType, checkType?: 'startDate' | 'endDate'): keyof NotificationPreferences | null {
+export function getNotificationSettingKey(type: NotificationType, checkType?: 'startDate' | 'endDate' | 'completion' | 'projectEndDate'): keyof NotificationPreferences | null {
   switch (type) {
     case NotificationType.TaskCreated:
       return 'taskCreated';
@@ -99,6 +105,12 @@ export function getNotificationSettingKey(type: NotificationType, checkType?: 's
       return 'projectRestored';
     case NotificationType.ProjectCompleted:
       return 'projectCompleted';
+    case NotificationType.ProjectMemberAdded:
+      return 'projectMemberAdded';
+    case NotificationType.ProjectMemberRemoved:
+      return 'projectMemberRemoved';
+    case NotificationType.ProjectMemberRoleChanged:
+      return 'projectMemberRoleChanged';
     case NotificationType.TaskOverdue:
       // checkTypeに基づいて設定キーを返す
       if (checkType === 'startDate') {
@@ -128,7 +140,7 @@ export function getNotificationSettingKey(type: NotificationType, checkType?: 's
 }
 
 // 通知タイプからWebPush設定のキーを取得する関数
-export function getWebPushSettingKey(type: NotificationType, checkType?: 'startDate' | 'endDate'): keyof NotificationPreferences | null {
+export function getWebPushSettingKey(type: NotificationType, checkType?: 'startDate' | 'endDate' | 'completion' | 'projectEndDate'): keyof NotificationPreferences | null {
   const baseKey = getNotificationSettingKey(type, checkType);
   if (!baseKey) return null;
   

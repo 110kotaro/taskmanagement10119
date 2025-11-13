@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { Location } from '@angular/common';
 import { TeamService } from '../../services/team.service';
 import { AuthService } from '../../services/auth.service';
 import { Team } from '../../models/team.model';
@@ -16,6 +17,7 @@ export class TeamListComponent implements OnInit {
   private teamService = inject(TeamService);
   private authService = inject(AuthService);
   private router = inject(Router);
+  private location = inject(Location);
 
   teams: Team[] = [];
   isLoading = true;
@@ -55,7 +57,11 @@ export class TeamListComponent implements OnInit {
   }
 
   goBack() {
-    this.router.navigate(['/home']);
+    if (window.history.length > 1) {
+      this.location.back();
+    } else {
+      this.router.navigate(['/home']);
+    }
   }
 }
 

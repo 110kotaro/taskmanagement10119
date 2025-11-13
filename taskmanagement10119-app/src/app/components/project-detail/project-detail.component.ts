@@ -1,16 +1,20 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Timestamp } from 'firebase/firestore';
+import { Location } from '@angular/common';
+import { Timestamp, doc, setDoc, getDoc } from 'firebase/firestore';
+import { db } from '../../../firebase-config';
 import { ProjectService } from '../../services/project.service';
 import { TaskService } from '../../services/task.service';
 import { TeamService } from '../../services/team.service';
 import { AuthService } from '../../services/auth.service';
 import { StorageService } from '../../services/storage.service';
+import { NotificationService } from '../../services/notification.service';
 import { Project, ProjectRole, ProjectStatus } from '../../models/project.model';
-import { Task } from '../../models/task.model';
-import { Team, TeamMember } from '../../models/team.model';
+import { Task, Comment, TaskStatus } from '../../models/task.model';
+import { Team, TeamMember, TeamRole } from '../../models/team.model';
+import { NotificationType } from '../../models/notification.model';
 
 @Component({
   selector: 'app-project-detail',
@@ -22,6 +26,7 @@ import { Team, TeamMember } from '../../models/team.model';
 export class ProjectDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private location = inject(Location);
   private projectService = inject(ProjectService);
   private taskService = inject(TaskService);
 
@@ -33,6 +38,7 @@ export class ProjectDetailComponent implements OnInit {
   // isAdmin = false; // 削除（チーム管理者判定に変更）
   canEdit = false;
   canManageMembers = false;
+  canCreateTask = false; // タスク作成権限
   isFromArchive = false; // アーカイブから遷移したかどうか
   userTeams: Team[] = [];
   showEditModal = false;
@@ -69,6 +75,19 @@ export class ProjectDetailComponent implements OnInit {
   authService = inject(AuthService); // テンプレートで使用するためpublic
   private teamService = inject(TeamService);
   private storageService = inject(StorageService);
+  private notificationService = inject(NotificationService);
+
+  // コメント関連
+  showCommentsTab = false;
+  newCommentContent = '';
+  unreadCommentCount = 0; // 未読コメント数
+  readCommentIds: Set<string> = new Set(); // 既読コメントIDのセット
+  mentionableUsers: { id: string; name: string; email: string }[] = [];
+  showMentionSuggestions = false;
+  mentionSuggestions: { id: string; name: string; email: string }[] = [];
+  mentionSearchText = '';
+  mentionCursorPosition = 0;
+  @ViewChild('commentTextarea', { static: false }) commentTextarea?: ElementRef<HTMLTextAreaElement>;
 
   async ngOnInit() {
     const projectId = this.route.snapshot.paramMap.get('id');
@@ -95,6 +114,17 @@ export class ProjectDetailComponent implements OnInit {
       
       // プロジェクトに関連するタスクを読み込む
       if (this.project) {
+        // コメント一覧から遷移した場合はコメントタブを開いて既読にする
+        if (from === 'comments') {
+          this.showCommentsTab = true;
+          // コメントがある場合は既読にする
+          if (this.project.comments && this.project.comments.length > 0) {
+            this.markCommentsAsRead(projectId);
+          }
+        }
+        
+        // 未読コメント数を計算
+        await this.loadUnreadCommentCount();
         this.tasks = await this.taskService.getTasks({ 
           projectId: projectId,
           isDeleted: false 
@@ -113,6 +143,7 @@ export class ProjectDetailComponent implements OnInit {
         if (this.isFromArchive || isDeleted) {
           this.canEdit = false;
           this.canManageMembers = false;
+          this.canCreateTask = false;
         } else {
           // 権限チェック
           const user = this.authService.currentUser;
@@ -122,6 +153,31 @@ export class ProjectDetailComponent implements OnInit {
             // isAdmin は削除（チーム管理者判定に変更）
             this.canEdit = await this.projectService.canEditProject(projectId, user.uid);
             this.canManageMembers = await this.projectService.canManageMembers(projectId, user.uid);
+            
+            // タスク作成権限をチェック
+            // 個人プロジェクトの場合は常に作成可能、チームプロジェクトの場合は権限チェック
+            if (this.project.teamId) {
+              // チームプロジェクトの場合
+              const isProjectMember = this.project.members && this.project.members.some(m => m.userId === user.uid);
+              const isProjectOwner = this.project.ownerId === user.uid;
+              
+              // チーム管理者かどうかをチェック
+              let isTeamAdmin = false;
+              try {
+                const team = await this.teamService.getTeam(this.project.teamId);
+                if (team) {
+                  const teamMember = team.members.find(m => m.userId === user.uid);
+                  isTeamAdmin = teamMember?.role === TeamRole.Admin || teamMember?.role === TeamRole.Owner || team.ownerId === user.uid;
+                }
+              } catch (error) {
+                console.error('Error checking team admin:', error);
+              }
+              
+              this.canCreateTask = isProjectMember || isProjectOwner || isTeamAdmin;
+            } else {
+              // 個人プロジェクトの場合は常に作成可能
+              this.canCreateTask = true;
+            }
             
             // チーム一覧を取得（メンバー管理用）
             if (this.canEdit) {
@@ -149,6 +205,11 @@ export class ProjectDetailComponent implements OnInit {
             }
           }
         }
+      }
+      
+      // メンション可能なユーザーリストを取得
+      if (this.project) {
+        await this.loadMentionableUsers();
       }
       
       this.isLoading = false;
@@ -214,6 +275,15 @@ export class ProjectDetailComponent implements OnInit {
     return statusMap[status as string] || status;
   }
 
+  getTaskStatusLabel(status: string | TaskStatus): string {
+    const statusMap: { [key: string]: string } = {
+      'not_started': '未着手',
+      'in_progress': '進行中',
+      'completed': '完了'
+    };
+    return statusMap[status as string] || status;
+  }
+
   getPriorityLabel(priority: string): string {
     const priorityMap: { [key: string]: string } = {
       'important': '重要',
@@ -229,23 +299,30 @@ export class ProjectDetailComponent implements OnInit {
   }
 
   goBack() {
-    // どこから来たかを確認して戻る
-    const from = this.route.snapshot.queryParamMap.get('from');
-    if (from === 'gantt') {
-      this.router.navigate(['/gantt']);
+    if (window.history.length > 1) {
+      this.location.back();
     } else {
+      // 履歴がない場合はプロジェクト一覧に戻る
       this.router.navigate(['/projects']);
     }
   }
 
   createTask() {
     if (this.project) {
-      this.router.navigate(['/task/create'], { 
-        queryParams: { 
-          projectId: this.project.id,
-          from: 'project-detail'
-        } 
-      });
+      const queryParams: any = { 
+        projectId: this.project.id,
+        from: 'project-detail'
+      };
+      
+      // 個人/チームモードを判定（プロジェクトのteamIdから）
+      if (this.project.teamId) {
+        queryParams['teamId'] = this.project.teamId;
+        queryParams['viewMode'] = 'team';
+      } else {
+        queryParams['viewMode'] = 'personal';
+      }
+      
+      this.router.navigate(['/task/create'], { queryParams });
     }
   }
 
@@ -313,13 +390,36 @@ export class ProjectDetailComponent implements OnInit {
     
     const startDate = new Date(this.editFormData.startDate);
     const endDate = new Date(this.editFormData.endDate);
-    if (startDate > endDate) {
-      alert('開始日は終了日より前である必要があります');
+    if (endDate.getTime() < startDate.getTime()) {
+      alert('終了日は開始日より後である必要があります');
       return;
     }
     
     try {
       this.isLoading = true;
+      
+      // ステータスが「完了」に変更される場合、確認ダイアログを表示
+      if (this.editFormData.status === ProjectStatus.Completed && 
+          this.project.status !== ProjectStatus.Completed) {
+        // 未完了タスクのチェック
+        const projectTasks = await this.taskService.getTasks({
+          projectId: this.project.id,
+          isDeleted: false
+        });
+        const incompleteTasks = projectTasks.filter(task => task.status !== TaskStatus.Completed);
+        
+        if (incompleteTasks.length > 0) {
+          alert('未完了タスクが存在します。完了するか、削除してください。');
+          this.isLoading = false;
+          return;
+        }
+        
+        if (!confirm('このプロジェクトを完了にしますか？')) {
+          // キャンセルされた場合は処理を中断
+          this.isLoading = false;
+          return;
+        }
+      }
       
       const updates: any = {
         name: this.editFormData.name.trim(),
@@ -379,7 +479,7 @@ export class ProjectDetailComponent implements OnInit {
         selectedMember.userId,
         selectedMember.userName,
         selectedMember.userEmail,
-        this.selectedRole
+        ProjectRole.Member
       );
       
       alert('メンバーを追加しました');
@@ -587,6 +687,298 @@ export class ProjectDetailComponent implements OnInit {
 
   downloadFile(fileUrl: string, fileName: string): void {
     window.open(fileUrl, '_blank');
+  }
+
+  // コメント関連メソッド
+  async loadMentionableUsers() {
+    if (!this.project) return;
+    
+    try {
+      // プロジェクトメンバーのみをメンション可能なユーザーとして設定
+      if (this.project.members && this.project.members.length > 0) {
+        this.mentionableUsers = this.project.members.map(member => ({
+          id: member.userId,
+          name: member.userName,
+          email: member.userEmail
+        }));
+      } else {
+        this.mentionableUsers = [];
+      }
+    } catch (error) {
+      console.error('Error loading mentionable users:', error);
+      this.mentionableUsers = [];
+    }
+  }
+
+  // コメントからメンションをパースしてユーザーIDのリストを取得
+  parseMentions(content: string): string[] {
+    // @の後に続く文字列を取得（スペース、改行、@まで）- 全角・半角両方に対応
+    const mentionRegex = /[@＠]([^\s@＠\n]+)/g;
+    const matches = content.matchAll(mentionRegex);
+    const mentionedUserIds: string[] = [];
+    const userMap = new Map<string, string>();
+    
+    // メンション可能なユーザーをマップに追加（名前とメールで検索できるように）
+    this.mentionableUsers.forEach(user => {
+      // ユーザー名を正規化（小文字、スペース除去）
+      const normalizedName = user.name.toLowerCase().replace(/\s+/g, '');
+      userMap.set(normalizedName, user.id);
+      userMap.set(user.name.toLowerCase(), user.id);
+      userMap.set(user.email.toLowerCase(), user.id);
+      // メールの@より前の部分も検索対象に
+      const emailPrefix = user.email.split('@')[0].toLowerCase();
+      userMap.set(emailPrefix, user.id);
+    });
+
+    for (const match of matches) {
+      const mentionText = match[1].toLowerCase().replace(/\s+/g, '');
+      const userId = userMap.get(mentionText);
+      if (userId && !mentionedUserIds.includes(userId)) {
+        mentionedUserIds.push(userId);
+      }
+    }
+
+    return mentionedUserIds;
+  }
+
+  // @メンションオートコンプリート関連メソッド
+  onCommentInput(event: Event) {
+    const textarea = event.target as HTMLTextAreaElement;
+    const content = textarea.value;
+    const cursorPosition = textarea.selectionStart;
+    this.mentionCursorPosition = cursorPosition;
+
+    // @の直後のテキストを取得（全角・半角両方に対応）
+    const textBeforeCursor = content.substring(0, cursorPosition);
+    const lastHalfAt = textBeforeCursor.lastIndexOf('@'); // 半角
+    const lastFullAt = textBeforeCursor.lastIndexOf('＠'); // 全角
+    const lastAtIndex = Math.max(lastHalfAt, lastFullAt);
+    
+    if (lastAtIndex !== -1) {
+      // @の後にスペースや改行がない場合のみ候補を表示
+      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+      if (!textAfterAt.match(/[\s\n]/)) {
+        this.mentionSearchText = textAfterAt;
+        this.updateMentionSuggestions();
+        // mentionSuggestionsの長さで判定
+        this.showMentionSuggestions = this.mentionSuggestions.length > 0 && this.mentionableUsers.length > 0;
+        return;
+      }
+    }
+    
+    this.showMentionSuggestions = false;
+  }
+
+  updateMentionSuggestions() {
+    if (!this.mentionSearchText) {
+      this.mentionSuggestions = [...this.mentionableUsers];
+    } else {
+      const searchLower = this.mentionSearchText.toLowerCase();
+      this.mentionSuggestions = this.mentionableUsers.filter(user =>
+        user.name.toLowerCase().includes(searchLower) ||
+        user.email.toLowerCase().includes(searchLower) ||
+        user.email.split('@')[0].toLowerCase().includes(searchLower)
+      );
+    }
+  }
+
+  selectMention(user: { id: string; name: string; email: string }) {
+    const textarea = this.commentTextarea?.nativeElement;
+    if (!textarea) return;
+
+    const content = textarea.value;
+    const cursorPosition = this.mentionCursorPosition;
+    const textBeforeCursor = content.substring(0, cursorPosition);
+    // 全角・半角両方に対応
+    const lastHalfAt = textBeforeCursor.lastIndexOf('@'); // 半角
+    const lastFullAt = textBeforeCursor.lastIndexOf('＠'); // 全角
+    const lastAtIndex = Math.max(lastHalfAt, lastFullAt);
+    
+    if (lastAtIndex !== -1) {
+      const beforeAt = content.substring(0, lastAtIndex);
+      const afterCursor = content.substring(cursorPosition);
+      // 元の@記号（全角か半角か）を保持
+      const atSymbol = lastHalfAt > lastFullAt ? '@' : '＠';
+      const newContent = `${beforeAt}${atSymbol}${user.name} ${afterCursor}`;
+      
+      this.newCommentContent = newContent;
+      this.showMentionSuggestions = false;
+      
+      // カーソル位置を調整
+      setTimeout(() => {
+        const newCursorPosition = lastAtIndex + user.name.length + 2; // @ + name + space
+        textarea.setSelectionRange(newCursorPosition, newCursorPosition);
+        textarea.focus();
+      }, 0);
+    }
+  }
+
+  hideMentionSuggestions() {
+    setTimeout(() => {
+      this.showMentionSuggestions = false;
+    }, 200);
+  }
+
+  async addComment() {
+    if (!this.project || !this.newCommentContent.trim()) return;
+
+    const user = this.authService.currentUser;
+    if (!user) return;
+
+    try {
+      const userName = user.displayName || user.email || 'Unknown';
+      const mentionedUserIds = this.parseMentions(this.newCommentContent);
+
+      const newComment: Comment = {
+        id: Date.now().toString() + Math.random().toString(36).substring(2, 11),
+        userId: user.uid,
+        userName: userName,
+        content: this.newCommentContent.trim(),
+        createdAt: Timestamp.now()
+      };
+
+      // mentionedUserIdsが空でない場合のみ追加
+      if (mentionedUserIds.length > 0) {
+        newComment.mentionedUserIds = mentionedUserIds;
+      }
+
+      const currentComments = this.project.comments || [];
+      const updatedComments = [...currentComments, newComment];
+
+      await this.projectService.updateProject(this.project.id, {
+        comments: updatedComments
+      }, true); // skipAutoComment = true（手動コメント追加のため）
+
+      // メンションされたユーザーに通知を送信（コメント作成者を除く）
+      if (mentionedUserIds.length > 0) {
+        for (const mentionedUserId of mentionedUserIds) {
+          if (mentionedUserId !== user.uid) {
+            await this.notificationService.createNotification({
+              userId: mentionedUserId,
+              type: NotificationType.ProjectUpdated,
+              title: 'プロジェクトでメンションされました',
+              message: `${userName}がプロジェクト「${this.project.name}」のコメントでメンションしました`,
+              projectId: this.project.id
+            });
+          }
+        }
+      }
+
+      this.newCommentContent = '';
+      await this.loadProject(this.project.id);
+      // 未読コメント数を再計算（新規コメントは自分が追加したので既読扱い）
+      await this.loadUnreadCommentCount();
+      
+      // サイドバーの未読コメント数を更新
+      window.dispatchEvent(new CustomEvent('commentUpdated'));
+    } catch (error: any) {
+      alert('コメントの追加に失敗しました: ' + error.message);
+    }
+  }
+
+  toggleCommentsTab() {
+    this.showCommentsTab = !this.showCommentsTab;
+    // コメントタブが開かれた時に既読にする
+    if (this.showCommentsTab && this.project) {
+      this.markCommentsAsRead(this.project.id);
+      // 未読コメント数を再計算
+      this.loadUnreadCommentCount();
+    }
+  }
+
+  // 未読コメント数を読み込む
+  async loadUnreadCommentCount() {
+    const user = this.authService.currentUser;
+    if (!user || !this.project) {
+      this.unreadCommentCount = 0;
+      this.readCommentIds = new Set();
+      return;
+    }
+
+    try {
+      // 既読状態を取得（プロジェクトの場合は`project_${projectId}`をキーとして使用）
+      const readStatusRef = doc(db, 'commentReadStatus', `${user.uid}_project_${this.project.id}`);
+      const readStatusSnap = await getDoc(readStatusRef);
+      
+      if (!readStatusSnap.exists()) {
+        // 既読状態が存在しない場合、全コメントを未読とする
+        this.readCommentIds = new Set();
+        this.unreadCommentCount = this.project.comments?.length || 0;
+        return;
+      }
+
+      const readStatus = readStatusSnap.data();
+      this.readCommentIds = new Set(readStatus?.['readCommentIds'] || []);
+      
+      // 未読コメント数を計算
+      if (!this.project.comments || this.project.comments.length === 0) {
+        this.unreadCommentCount = 0;
+      } else {
+        this.unreadCommentCount = this.project.comments.filter(
+          comment => !this.readCommentIds.has(comment.id)
+        ).length;
+      }
+    } catch (error) {
+      console.error('Error loading unread comment count:', error);
+      this.unreadCommentCount = 0;
+      this.readCommentIds = new Set();
+    }
+  }
+
+  // コメントが未読かどうかを判定
+  isCommentUnread(commentId: string): boolean {
+    return !this.readCommentIds.has(commentId);
+  }
+
+  // コメントを既読にする
+  async markCommentsAsRead(projectId: string) {
+    const user = this.authService.currentUser;
+    if (!user) return;
+    
+    const project = this.project;
+    if (!project || !project.comments || project.comments.length === 0) return;
+    
+    try {
+      // 現在のプロジェクトの全コメントIDを取得
+      const allCommentIds = project.comments.map(c => c.id);
+      
+      // commentReadStatusを更新（プロジェクトの場合は`project_${projectId}`をキーとして使用）
+      const readStatusRef = doc(db, 'commentReadStatus', `${user.uid}_project_${projectId}`);
+      await setDoc(readStatusRef, {
+        userId: user.uid,
+        taskId: `project_${projectId}`,
+        readCommentIds: allCommentIds,
+        lastReadAt: Timestamp.now()
+      }, { merge: true });
+      
+      // 既読IDセットを更新
+      this.readCommentIds = new Set(allCommentIds);
+      // 未読コメント数を再計算
+      await this.loadUnreadCommentCount();
+      
+      // サイドバーの未読コメント数を更新
+      window.dispatchEvent(new CustomEvent('commentUpdated'));
+    } catch (error) {
+      console.error('Error marking comments as read:', error);
+    }
+  }
+
+  get sortedComments(): Comment[] {
+    if (!this.project || !this.project.comments) return [];
+    return [...this.project.comments].sort((a, b) => {
+      return a.createdAt.toMillis() - b.createdAt.toMillis();
+    });
+  }
+
+  formatDateTime(timestamp: Timestamp): string {
+    const date = timestamp.toDate();
+    return date.toLocaleString('ja-JP', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   }
 }
 

@@ -2,9 +2,11 @@ import { Component, Input, Output, EventEmitter, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Project, ProjectStatus } from '../../models/project.model';
 import { ProjectService } from '../../services/project.service';
+import { TaskService } from '../../services/task.service';
 import { AuthService } from '../../services/auth.service';
 import { NotificationService } from '../../services/notification.service';
 import { NotificationType } from '../../models/notification.model';
+import { TaskStatus } from '../../models/task.model';
 import { Timestamp } from 'firebase/firestore';
 
 export type ProjectCompletionAction = 'complete' | 'not_complete';
@@ -18,6 +20,7 @@ export type ProjectCompletionAction = 'complete' | 'not_complete';
 })
 export class ProjectCompletionConfirmationComponent {
   private projectService = inject(ProjectService);
+  private taskService = inject(TaskService);
   private authService = inject(AuthService);
   private notificationService = inject(NotificationService);
 
@@ -29,6 +32,24 @@ export class ProjectCompletionConfirmationComponent {
 
   async onAction(action: ProjectCompletionAction) {
     if (action === 'complete') {
+      // 未完了タスクのチェック
+      const projectTasks = await this.taskService.getTasks({
+        projectId: this.project.id,
+        isDeleted: false
+      });
+      const incompleteTasks = projectTasks.filter(task => task.status !== TaskStatus.Completed);
+      
+      if (incompleteTasks.length > 0) {
+        alert('未完了タスクが存在します。完了するか、削除してください。');
+        return;
+      }
+      
+      // 確認ダイアログを表示
+      if (!confirm('このプロジェクトを完了にしますか？')) {
+        // キャンセルされた場合は処理を中断
+        return;
+      }
+      
       // ステータスを完了に変更
       await this.projectService.updateProject(this.project.id, {
         status: ProjectStatus.Completed,
@@ -54,7 +75,8 @@ export class ProjectCompletionConfirmationComponent {
       this.actionSelected.emit(action);
       this.closed.emit();
     } else if (action === 'not_complete') {
-      // 完了しない（チェック済みフラグは更新しない - 次回も確認するため）
+      // 完了しない（dateCheckedAtを更新して、次回も確認する）
+      await this.projectService.markProjectDateChecked(this.project.id);
       this.actionSelected.emit(action);
       this.closed.emit();
     }

@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
+import { Location } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TeamService } from '../../services/team.service';
 import { AuthService } from '../../services/auth.service';
@@ -17,6 +18,7 @@ import { TeamInvitation } from '../../models/team-invitation.model';
 export class TeamDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private location = inject(Location);
   private teamService = inject(TeamService);
   private authService = inject(AuthService);
 
@@ -24,11 +26,9 @@ export class TeamDetailComponent implements OnInit {
   isLoading = true;
   isEditing = false;
   isInviting = false;
-  isSendingAnnouncement = false;
   isGeneratingLink = false;
   
   inviteEmail = '';
-  announcementMessage = '';
   invitationLink = '';
   showInvitationLink = false;
   
@@ -185,26 +185,6 @@ export class TeamDetailComponent implements OnInit {
     }
   }
 
-  async onSendAnnouncement() {
-    if (!this.announcementMessage.trim()) {
-      alert('お知らせの内容を入力してください');
-      return;
-    }
-
-    if (!this.team) return;
-
-    try {
-      this.isSendingAnnouncement = true;
-      await this.teamService.sendAdminAnnouncement(this.team.id, this.announcementMessage.trim());
-      alert('お知らせを送信しました');
-      this.announcementMessage = '';
-      this.isSendingAnnouncement = false;
-    } catch (error: any) {
-      alert('お知らせの送信に失敗しました: ' + error.message);
-      this.isSendingAnnouncement = false;
-    }
-  }
-
   getRoleLabel(role: TeamRole): string {
     const roleLabels: { [key: string]: string } = {
       'owner': 'オーナー',
@@ -225,7 +205,12 @@ export class TeamDetailComponent implements OnInit {
   }
 
   goBack() {
-    this.router.navigate(['/teams']);
+    if (window.history.length > 1) {
+      this.location.back();
+    } else {
+      // 履歴がない場合はチーム一覧に戻る
+      this.router.navigate(['/teams']);
+    }
   }
 }
 

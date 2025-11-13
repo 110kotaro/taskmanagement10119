@@ -2,7 +2,7 @@
   <div class="gantt-header">
     <div class="gantt-header-left">
     <button class="back-btn" (click)="goBack()">← 戻る</button>
-    <h1>ガントチャート</h1>
+    <h1>📊 ガントチャート</h1>
     </div>
     <div class="gantt-header-right">
       <div class="view-mode-switcher">
@@ -28,6 +28,189 @@
 
     <div *ngIf="!isLoading && dateRange && customDateRange && dateColumns.length > 0" class="gantt-content">
 
+      <!-- フィルターセクション（プロジェクトモード） -->
+      <div *ngIf="viewMode === 'projects' && !isLoading" class="filter-section">
+        <!-- ステータスフィルター -->
+        <div class="filter-group">
+          <label class="filter-label">ステータス:</label>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="projectStatusFilters.has('not_started')"
+                (change)="onProjectStatusFilterChange('not_started', $any($event.target).checked)">
+              <span>未開始</span>
+            </label>
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="projectStatusFilters.has('in_progress')"
+                (change)="onProjectStatusFilterChange('in_progress', $any($event.target).checked)">
+              <span>進行中</span>
+            </label>
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="projectStatusFilters.has('completed')"
+                (change)="onProjectStatusFilterChange('completed', $any($event.target).checked)">
+              <span>完了済み</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- ソートセクション（プロジェクトモード） -->
+      <div *ngIf="viewMode === 'projects' && !isLoading" class="sort-section">
+        <div class="sort-group">
+          <label>ソート:</label>
+          <select [value]="projectSortBy" (change)="onProjectSortChange($any($event.target).value)">
+            <option value="endDate">期限順</option>
+            <option value="createdAt">開始日順</option>
+            <option value="name">プロジェクト名順</option>
+          </select>
+          <button class="sort-order-btn" (click)="toggleProjectSortOrder()">
+            {{ projectSortOrder === 'asc' ? '昇順 ↑ ' : '降順 ↓ ' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- フィルターセクション（タスクモードのみ） -->
+      <div *ngIf="viewMode === 'tasks' && !isLoading" class="filter-section">
+        <!-- ステータスフィルター -->
+        <div class="filter-group">
+          <label class="filter-label">ステータス:</label>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="statusFilters.has('not_started')"
+                (change)="onStatusFilterChange('not_started', $any($event.target).checked)">
+              <span>未着手</span>
+            </label>
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="statusFilters.has('in_progress')"
+                (change)="onStatusFilterChange('in_progress', $any($event.target).checked)">
+              <span>進行中</span>
+            </label>
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="statusFilters.has('completed')"
+                (change)="onStatusFilterChange('completed', $any($event.target).checked)">
+              <span>完了済み</span>
+            </label>
+          </div>
+        </div>
+        
+        <!-- 期限切れフィルター（独立） -->
+        <div class="filter-group">
+          <label class="filter-label">期限切れ:</label>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="overdueFilter"
+                (change)="onOverdueFilterChange($any($event.target).checked)">
+              <span>期限切れを含める</span>
+            </label>
+          </div>
+        </div>
+        
+        <!-- 重要度フィルター -->
+        <div class="filter-group">
+          <label class="filter-label">重要度:</label>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="priorityFilters.has('important')"
+                (change)="onPriorityFilterChange('important', $any($event.target).checked)">
+              <span>重要</span>
+            </label>
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="priorityFilters.has('normal')"
+                (change)="onPriorityFilterChange('normal', $any($event.target).checked)">
+              <span>普通</span>
+            </label>
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="priorityFilters.has('low')"
+                (change)="onPriorityFilterChange('low', $any($event.target).checked)">
+              <span>低め</span>
+            </label>
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="priorityFilters.has('none')"
+                (change)="onPriorityFilterChange('none', $any($event.target).checked)">
+              <span>なし</span>
+            </label>
+          </div>
+        </div>
+        
+        <!-- タスクタイプフィルター -->
+        <div class="filter-group">
+          <label class="filter-label">タスクタイプ:</label>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="taskTypeFilters.has('normal')"
+                (change)="onTaskTypeFilterChange('normal', $any($event.target).checked)">
+              <span>通常</span>
+            </label>
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="taskTypeFilters.has('meeting')"
+                (change)="onTaskTypeFilterChange('meeting', $any($event.target).checked)">
+              <span>会議</span>
+            </label>
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="taskTypeFilters.has('regular')"
+                (change)="onTaskTypeFilterChange('regular', $any($event.target).checked)">
+              <span>定期</span>
+            </label>
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="taskTypeFilters.has('project')"
+                (change)="onTaskTypeFilterChange('project', $any($event.target).checked)">
+              <span>プロジェクト</span>
+            </label>
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="taskTypeFilters.has('other')"
+                (change)="onTaskTypeFilterChange('other', $any($event.target).checked)">
+              <span>その他</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- ソートセクション（タスクモードのみ） -->
+      <div *ngIf="viewMode === 'tasks' && !isLoading" class="sort-section">
+        <div class="sort-group">
+          <label>ソート:</label>
+          <select [value]="sortBy" (change)="onSortChange($any($event.target).value)">
+            <option value="endDate">期限順</option>
+            <option value="startDate">開始日順</option>
+            <option value="priority">重要度順</option>
+            <option value="title">タイトル順</option>
+          </select>
+          <button class="sort-order-btn" (click)="toggleSortOrder()">
+            {{ sortOrder === 'asc' ? '昇順 ↑ ' : '降順 ↓ ' }}
+          </button>
+        </div>
+      </div>
       
 
       <!-- 凡例 -->
@@ -69,7 +252,7 @@
           </div>
         </ng-container>
       </div>
-
+      
       
       <!-- ナビゲーションコントロール -->
       <div class="gantt-nav-controls">
@@ -218,6 +401,7 @@
                 <div class="grid-bar-overlay" 
                      [style.grid-column]="getBarGridColumn(ganttProject)"
                      [style.grid-row]="getGridRow(rowIndex)"
+                     (mousedown)="onProjectBarDragStart($event, ganttProject.project.id, ganttProject.project.startDate.toDate(), ganttProject.project.endDate.toDate())"
                      (click)="viewProject(ganttProject.project.id)">
                   <div class="grid-bar-unified"   
                      [style.background-color]="getProjectColor(ganttProject.project.completionRate)"
@@ -225,9 +409,21 @@
                      [class.truncated-end]="ganttProject.isEndTruncated"
                      (mouseenter)="onProjectHover($event, ganttProject)"
                      (mouseleave)="onProjectLeave()">   
+                    <!-- 左端ドラッグハンドル -->
+                    <div class="drag-handle drag-handle-start"
+                         *ngIf="!ganttProject.isStartTruncated"
+                         (mousedown)="onProjectDragStart($event, ganttProject.project.id, ganttProject.project.startDate.toDate())"
+                         (click)="$event.stopPropagation()">
+                    </div>
                     <span class="bar-duration">
-                      {{ ganttProject.durationDays }}日
+                      {{ ganttProject.actualDurationDays || ganttProject.durationDays }}日
                     </span>
+                    <!-- 右端ドラッグハンドル -->
+                    <div class="drag-handle drag-handle-end"
+                         *ngIf="!ganttProject.isEndTruncated"
+                         (mousedown)="onProjectDragEndStart($event, ganttProject.project.id, ganttProject.project.endDate.toDate())"
+                         (click)="$event.stopPropagation()">
+                    </div>
                   </div>
                 </div>
               </ng-container>
@@ -280,6 +476,10 @@
         <span class="tooltip-label">プロジェクト名:</span>
         <span class="tooltip-value">{{ hoveredTask.task.projectName || '未設定' }}</span>
       </div>
+      <div class="tooltip-row" *ngIf="hoveredTask.task.teamId">
+        <span class="tooltip-label">チーム名:</span>
+        <span class="tooltip-value">{{ hoveredTask.task.teamName || '未設定' }}</span>
+      </div>
     </div>
   </div>
 
@@ -303,6 +503,10 @@
       <div class="tooltip-row">
         <span class="tooltip-label">期間:</span>
         <span class="tooltip-value">{{ formatProjectPeriod(hoveredProject.project) }}</span>
+      </div>
+      <div class="tooltip-row" *ngIf="hoveredProject.project.teamId">
+        <span class="tooltip-label">チーム名:</span>
+        <span class="tooltip-value">{{ hoveredProject.project.teamName || '未設定' }}</span>
       </div>
     </div>
   </div>

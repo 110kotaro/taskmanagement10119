@@ -18,6 +18,13 @@
   background: var(--color-background);
 }
 
+/* ログイン画面用のスタイル */
+.app-container.login-container-wrapper {
+  justify-content: center;
+  align-items: center;
+  background: var(--gradient-background);
+}
+
 /* サイドバーの状態に応じてCSS変数を設定（グローバルスコープで） */
 .app-container {
   --sidebar-width: 250px;
@@ -91,7 +98,7 @@
   color: white;
   padding: var(--spacing-md) var(--spacing-sm);
   cursor: pointer;
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   font-weight: bold;
   z-index: 1001;
   box-shadow: var(--shadow-md);
@@ -138,8 +145,12 @@
   font-weight: 600;
 }
 
-.notifications-item {
+.notifications-item,
+.comments-item {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .badge {
@@ -153,6 +164,7 @@
   justify-content: center;
   font-size: var(--font-size-sm);
   font-weight: bold;
+  flex-shrink: 0;
 }
 
 /* 個人/チーム切り替え */
@@ -191,7 +203,7 @@
 .team-select {
   padding: var(--spacing-xs) var(--spacing-sm);
   background: white;
-  color: var(--color-text);
+  color: black;
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: var(--border-radius);
   font-size: var(--font-size-sm);

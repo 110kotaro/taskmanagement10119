@@ -12,12 +12,12 @@
 }
 
 .modal-content {
-  background: white;
-  border-radius: 8px;
+  background: var(--color-surface);
+  border-radius: var(--border-radius-lg);
   padding: 2rem;
   max-width: 500px;
   width: 90%;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-lg);
 }
 
 .modal-header {
@@ -25,13 +25,13 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.5rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--color-border);
   padding-bottom: 1rem;
 }
 
 .modal-header h3 {
   margin: 0;
-  color: #333;
+  color: var(--color-text);
 }
 
 .close-btn {
@@ -39,19 +39,19 @@
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #666;
+  color: var(--color-text-secondary);
   padding: 0;
   width: 30px;
   height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: var(--border-radius);
   transition: background-color 0.2s;
 }
 
 .close-btn:hover {
-  background-color: #f0f0f0;
+  background-color: var(--color-background);
 }
 
 .modal-body {
@@ -61,13 +61,13 @@
 .task-info {
   margin-bottom: 1.5rem;
   padding: 1rem;
-  background: #f9f9f9;
-  border-radius: 4px;
+  background: var(--color-background);
+  border-radius: var(--border-radius);
 }
 
 .task-info p {
   margin: 0.5rem 0;
-  color: #333;
+  color: var(--color-text);
 }
 
 .form-group {
@@ -78,26 +78,28 @@
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 600;
-  color: #333;
+  color: var(--color-text);
 }
 
 .date-input {
   width: 100%;
   padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
   font-size: 1rem;
   box-sizing: border-box;
+  background: var(--color-background);
+  color: var(--color-text);
 }
 
 .date-input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .error-message {
-  color: #dc2626;
+  color: var(--color-error);
   font-size: 0.875rem;
   margin-top: 0.5rem;
 }
@@ -111,7 +113,7 @@
 .btn {
   padding: 0.75rem 1.5rem;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   cursor: pointer;
   font-weight: 600;
   transition: background-color 0.2s, transform 0.1s;
@@ -126,20 +128,20 @@
 }
 
 .btn-primary {
-  background-color: #667eea;
+  background-color: var(--color-primary);
   color: white;
 }
 
 .btn-primary:hover {
-  background-color: #5568d3;
+  background-color: var(--color-primary-dark);
 }
 
 .btn-secondary {
-  background-color: #6b7280;
+  background-color: var(--color-text-secondary);
   color: white;
 }
 
 .btn-secondary:hover {
-  background-color: #4b5563;
+  opacity: 0.9;
 }
 

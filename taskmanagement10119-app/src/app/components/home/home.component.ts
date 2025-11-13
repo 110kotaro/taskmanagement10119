@@ -230,6 +230,32 @@ export class HomeComponent implements OnInit {
     return statusMap[status] || status;
   }
 
+  // 開始日を過ぎている未着手タスクかどうか判定
+  isOverdueStartDate(task: Task): boolean {
+    if (task.status !== 'not_started') return false;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const startDate = task.startDate.toDate();
+    const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    
+    return startDateOnly < today;
+  }
+
+  // 終了日を過ぎているタスクかどうか判定（未完了）
+  isOverdueEndDate(task: Task): boolean {
+    if (task.status === 'completed') return false;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const endDate = task.endDate.toDate();
+    const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    
+    return endDateOnly < today;
+  }
+
   viewProjects() {
     this.router.navigate(['/projects']);
   }

@@ -2,6 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { Location } from '@angular/common';
 import { AuthService } from '../../services/auth.service';
 import { User, UserRole } from '../../models/user.model';
 import { updateProfile, updateEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser, User as FirebaseUser } from 'firebase/auth';
@@ -20,6 +21,7 @@ import { Timestamp } from 'firebase/firestore';
 export class AccountComponent implements OnInit {
   authService = inject(AuthService);
   router = inject(Router);
+  location = inject(Location);
 
   user: User | null = null;
   firebaseUser: FirebaseUser | null = null;
@@ -402,7 +404,11 @@ export class AccountComponent implements OnInit {
   }
 
   goBack() {
-    this.router.navigate(['/home']);
+    if (window.history.length > 1) {
+      this.location.back();
+    } else {
+      this.router.navigate(['/home']);
+    }
   }
 }
 

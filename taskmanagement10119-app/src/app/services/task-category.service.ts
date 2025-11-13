@@ -99,7 +99,7 @@ export class TaskCategoryService {
     
 
     if (overdueTasks.length > 0) {
-      categories.push({ name: '期限切れ（未完了）', tasks: overdueTasks });
+      categories.push({ name: '期限切れ', tasks: overdueTasks });
     }
 
     if (dueTodayTasks.length > 0) {
@@ -228,7 +228,7 @@ export class TaskCategoryService {
     
     // 表示順序に従って追加
     if (overdueTasks.length > 0) {
-      categories.push({ name: '期限切れ（未完了）', tasks: overdueTasks });
+      categories.push({ name: '期限切れ', tasks: overdueTasks });
     }
 
     if (dueThisWeekTasks.length > 0) {

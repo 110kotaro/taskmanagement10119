@@ -5,32 +5,37 @@
 }
 
 .project-create-card {
-  background: white;
+  background: var(--color-surface);
   padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
 }
 
 .header {
   margin-bottom: 2rem;
+  gap: 1rem;
 }
 
 .header h1 {
   margin: 1rem 0;
-  color: #333;
+  color: var(--color-text);
+  font-size: var(--font-size-xl);
 }
 
 .back-btn {
   padding: 0.5rem 1rem;
-  background: #667eea;
-  color: white;
-  border: none;
-  border-radius: 6px;
+  background: var(--color-background);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--border-radius);
   cursor: pointer;
+  font-size: var(--font-size-base);
+  transition: background 0.2s;
 }
 
 .back-btn:hover {
-  background: #5568d3;
+  opacity: 0.9;
+  background: var(--color-background);
 }
 
 .form-row {
@@ -46,7 +51,7 @@
 .form-group label {
   display: block;
   margin-bottom: 0.5rem;
-  color: #555;
+  color: var(--color-text);
   font-weight: 500;
 }
 
@@ -55,16 +60,18 @@
 .form-group select {
   width: 100%;
   padding: 0.75rem;
-  border: 2px solid #e0e0e0;
-  border-radius: 6px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
   font-size: 1rem;
+  background: var(--color-background);
+  color: var(--color-text);
 }
 
 .form-group input:focus,
 .form-group textarea:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--color-primary);
 }
 
 .form-actions {
@@ -77,47 +84,48 @@
 .cancel-btn, .create-btn {
   padding: 0.75rem 1.5rem;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   font-weight: 600;
   cursor: pointer;
 }
 
 .cancel-btn {
-  background: #e0e0e0;
-  color: #333;
+  background: var(--color-text-secondary);
+  color: white;
 }
 
 .cancel-btn:hover {
-  background: #d0d0d0;
+  opacity: 0.9;
 }
 
 .create-btn {
-  background: #667eea;
+  background: var(--color-primary);
   color: white;
 }
 
 .create-btn:hover:not(:disabled) {
-  background: #5568d3;
+  background: var(--color-primary-dark);
 }
 
 .create-btn:disabled {
-  background: #ccc;
+  background: var(--color-text-secondary);
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
 .info-text {
-  color: #666;
-  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
   font-style: italic;
   margin: 0.5rem 0;
 }
 
 .selected-team-info {
   padding: 0.75rem;
-  background: #f0f0f0;
-  border: 2px solid #667eea;
-  border-radius: 6px;
-  color: #333;
+  background: var(--color-background);
+  border: 2px solid var(--color-primary);
+  border-radius: var(--border-radius);
+  color: var(--color-text);
   font-weight: 500;
 }
 

@@ -32,21 +32,14 @@
         </div>
 
                <div class="form-group">
-                 <label for="priority">優先度 *</label>
+                 <label for="priority">重要度 *</label>
                  <select id="priority" formControlName="priority">
                    <option value="important">重要</option>
                    <option value="normal">普通</option>
                    <option value="low">低め</option>
                    <option value="none">なし</option>
-                   <option value="custom">カスタム</option>
                  </select>
                </div>
-             </div>
-
-             <!-- カスタム優先度 -->
-             <div class="form-group" *ngIf="createForm.get('priority')?.value === 'custom'">
-               <label for="customPriority">カスタム優先度名</label>
-               <input type="text" id="customPriority" formControlName="customPriority" placeholder="例: 緊急">
              </div>
 
       <!-- タスクタイプ -->
@@ -59,13 +52,7 @@
             <option value="regular">定期</option>
             <option value="project">プロジェクト</option>
             <option value="other">その他</option>
-            <option value="custom">カスタム設定</option>
           </select>
-        </div>
-
-        <div class="form-group" *ngIf="createForm.get('taskType')?.value === 'custom'">
-          <label for="customTaskTypeName">カスタムタスクタイプ名</label>
-          <input type="text" id="customTaskTypeName" formControlName="customTaskType" placeholder="例: リサーチ、レビューなど">
         </div>
       </div>
 
@@ -106,9 +93,18 @@
         <label for="assigneeId">担当者（オプション）</label>
         <select id="assigneeId" formControlName="assigneeId">
           <option value="">担当者なし</option>
-          <option *ngFor="let member of teamMembers" [value]="member.userId">
-            {{ member.userName || member.userEmail }}
-          </option>
+          <!-- プロジェクトが選択されている場合：プロジェクトメンバーのみ -->
+          <ng-container *ngIf="createForm.get('projectId')?.value && projectMembers.length > 0">
+            <option *ngFor="let member of projectMembers" [value]="member.userId">
+              {{ member.userName || member.userEmail }}
+            </option>
+          </ng-container>
+          <!-- プロジェクトが選択されていない場合：チームメンバーのみ -->
+          <ng-container *ngIf="!createForm.get('projectId')?.value && teamMembers.length > 0">
+            <option *ngFor="let member of teamMembers" [value]="member.userId">
+              {{ member.userName || member.userEmail }}
+            </option>
+          </ng-container>
         </select>
       </div>
       <!-- 個人モードの場合は担当者情報を非表示（作成者自身に固定） -->
@@ -150,6 +146,14 @@
       <div class="form-group" *ngIf="createForm.get('recurrence')?.value !== 'none'">
         <label for="recurrenceEndDate">繰り返し終了日（オプション）</label>
         <input type="date" id="recurrenceEndDate" formControlName="recurrenceEndDate">
+      </div>
+
+      <!-- 進捗率表示設定 -->
+      <div class="form-group">
+        <label>
+          <input type="checkbox" formControlName="showProgress"> 進捗率を表示する
+        </label>
+        <small class="form-hint">※ 進捗率を表示する場合のみサブタスクが利用可能です</small>
       </div>
 
       <!-- リマインダー設定 -->
@@ -211,17 +215,9 @@
         <input type="datetime-local" id="customReminderDateTime" formControlName="customReminderDateTime">
         </div>
 
-      <!-- 進捗率表示設定 -->
-      <div class="form-group">
-        <label>
-          <input type="checkbox" formControlName="showProgress"> 進捗率を表示する
-        </label>
-        <small class="form-hint">※ 進捗率を表示する場合のみサブタスクが利用可能です</small>
-      </div>
-
       <div class="form-actions">
         <button type="button" class="cancel-btn" (click)="goBack()">キャンセル</button>
-        <button type="submit" class="create-btn" [disabled]="createForm.invalid || isCreating">
+        <button type="submit" class="create-btn" [disabled]="isCreating">
           {{ isCreating ? '作成中...' : '作成' }}
         </button>
       </div>

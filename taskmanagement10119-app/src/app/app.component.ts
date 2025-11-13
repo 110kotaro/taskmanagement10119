@@ -2,6 +2,8 @@ import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { RouterOutlet, Router, RouterModule, NavigationEnd } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase-config';
 import { AuthService } from './services/auth.service';
 import { ReminderService } from './services/reminder.service';
 import { NotificationService } from './services/notification.service';
@@ -43,6 +45,7 @@ export class AppComponent implements OnInit, OnDestroy {
   private routerSubscription?: Subscription;
   
   unreadCount = 0;
+  unreadCommentTaskCount = 0; // 未読コメントがあるタスク数
   currentRoute = '';
   isSidebarOpen = true; // デスクトップではデフォルトで開く
   authInitialized = false; // 認証状態の初期化が完了したかどうか
@@ -58,6 +61,7 @@ export class AppComponent implements OnInit, OnDestroy {
   currentConfirmationTask: { task: Task; checkType: 'startDate' | 'endDate' } | null = null;
   showStatusConfirmation = false;
   showEndDateChange = false;
+  private isProcessingTask = false; // タスク処理中フラグ（処理中は新しいチェックを開始しない）
   private dateCheckInterval?: any; // 定期チェック用のインターバルID
   
   // 日付チェック関連（プロジェクト）
@@ -65,6 +69,7 @@ export class AppComponent implements OnInit, OnDestroy {
   currentConfirmationProject: { project: Project; type: 'completion' | 'endDate' } | null = null;
   showProjectCompletionConfirmation = false; // 完了率100%時の確認モーダル
   showProjectEndDateConfirmation = false; // 終了日経過時の確認モーダル
+  private isProcessingProject = false; // プロジェクト処理中フラグ（処理中は新しいチェックを開始しない）
 
   ngOnInit() {
     // ブラウザの自動翻訳を無効化
@@ -81,14 +86,17 @@ export class AppComponent implements OnInit, OnDestroy {
       const { taskId, checkType } = event.detail;
       this.showDateCheckModalFromNotification(taskId, checkType);
     }) as EventListener);
+
+    // プロジェクト日付チェックモーダル表示イベントをリッスン
+    window.addEventListener('showProjectDateCheckModal', ((event: CustomEvent) => {
+      const { projectId, checkType } = event.detail;
+      this.showProjectDateCheckModalFromNotification(projectId, checkType);
+    }) as EventListener);
     
     // テーマを初期化（サイドバーとヘッダーが正しく表示されるように）
     // ThemeServiceのコンストラクタで初期化されているが、確実に適用するため明示的に初期化
     const currentTheme = this.themeService.getCurrentTheme();
     this.themeService.setTheme(currentTheme);
-    
-    // Service Workerを登録（FCM用）
-    this.registerServiceWorker();
     
     // 認証状態の監視
     this.userSubscription = this.authService.currentUser$.subscribe(user => {
@@ -110,6 +118,8 @@ export class AppComponent implements OnInit, OnDestroy {
         this.reminderService.startReminderChecking();
         // 未読通知数を取得
         this.loadUnreadCount();
+        // 未読コメント数を取得
+        this.loadUnreadCommentTaskCount();
         // 日付チェックを実行（初回）
         this.checkAllTasksDates();
         this.checkAllProjectsDates();
@@ -119,13 +129,15 @@ export class AppComponent implements OnInit, OnDestroy {
         this.initializeFcm();
       } else {
         // 未ログインの場合、保護されたページにいる場合はログイン画面にリダイレクト
-        if (currentUrl !== '/login' && currentUrl !== '/') {
+        // ただし、チーム招待リンクページは除外
+        if (currentUrl !== '/login' && currentUrl !== '/' && !currentUrl.startsWith('/team-invitation')) {
           // ホームやプロジェクトページなどの保護されたページにいる場合はログイン画面へ
           this.router.navigate(['/login']);
         }
         // リマインダーチェックを停止
         this.reminderService.stopReminderChecking();
         this.unreadCount = 0;
+        this.unreadCommentTaskCount = 0;
         // 定期チェックを停止
         this.stopPeriodicDateCheck();
         // FCMトークンを削除
@@ -142,8 +154,25 @@ export class AppComponent implements OnInit, OnDestroy {
         const user = this.authService.currentUser;
         if (user) {
           this.loadUnreadCount();
+          this.loadUnreadCommentTaskCount();
         }
       });
+    
+    // ビューモード変更を監視して未読コメント数を更新
+    window.addEventListener('viewModeChanged', () => {
+      const user = this.authService.currentUser;
+      if (user) {
+        this.loadUnreadCommentTaskCount();
+      }
+    });
+    
+    // コメント更新を監視して未読コメント数を更新
+    window.addEventListener('commentUpdated', () => {
+      const user = this.authService.currentUser;
+      if (user) {
+        this.loadUnreadCommentTaskCount();
+      }
+    });
     
     // 初期ルートを設定
     this.currentRoute = this.router.url;
@@ -161,6 +190,136 @@ export class AppComponent implements OnInit, OnDestroy {
     } catch (error) {
       console.error('Error loading unread count:', error);
       this.unreadCount = 0;
+    }
+  }
+
+  // 未読コメントがあるタスク数とプロジェクト数を取得
+  async loadUnreadCommentTaskCount() {
+    try {
+      const user = this.authService.currentUser;
+      if (!user) {
+        this.unreadCommentTaskCount = 0;
+        return;
+      }
+
+      // 個人/チームモードに応じてタスクを取得（タスク一覧と同じロジック）
+      const viewMode = localStorage.getItem('viewMode') === 'team' ? 'team' : 'personal';
+      const selectedTeamId = localStorage.getItem('selectedTeamId');
+      
+      let fetchedTasks: Task[] = [];
+      if (viewMode === 'personal') {
+        // 個人モード: 自分が作成したタスク または 所属チームのタスクで自分が担当者
+        fetchedTasks = await this.taskService.getTasks({
+          isDeleted: false,
+          teamId: null,
+          userId: user.uid,
+          userTeamIds: this.userTeamIds
+        });
+      } else if (viewMode === 'team' && selectedTeamId) {
+        // チームモード: 選択されたチームのタスクのみ
+        fetchedTasks = await this.taskService.getTasks({
+          isDeleted: false,
+          teamId: selectedTeamId
+        });
+      }
+
+      // canViewTaskで閲覧可能なタスクのみをフィルタリング
+      const viewableTasks: Task[] = [];
+      for (const task of fetchedTasks) {
+        const canView = await this.taskService.canViewTask(task, user.uid);
+        if (canView) {
+          viewableTasks.push(task);
+        }
+      }
+
+      // コメントがあるタスクのみを対象に、未読コメントがあるタスク数をカウント
+      let unreadTaskCount = 0;
+      for (const task of viewableTasks) {
+        if (task.comments && task.comments.length > 0) {
+          const unreadCount = await this.calculateUnreadCommentCount(task, user.uid);
+          if (unreadCount > 0) {
+            unreadTaskCount++;
+          }
+        }
+      }
+
+      // ユーザーが見れる全てのプロジェクトを取得（プロジェクト一覧と同じロジック）
+      const projects = await this.projectService.getProjectsForUser(
+        user.uid,
+        viewMode === 'team' ? selectedTeamId : null,
+        this.userTeamIds
+      );
+
+      // コメントがあるプロジェクトのみを対象に、未読コメントがあるプロジェクト数をカウント
+      let unreadProjectCount = 0;
+      for (const project of projects) {
+        if (project.comments && project.comments.length > 0) {
+          const unreadCount = await this.calculateUnreadCommentCountForProject(project, user.uid);
+          if (unreadCount > 0) {
+            unreadProjectCount++;
+          }
+        }
+      }
+
+      // タスク数とプロジェクト数を合計
+      this.unreadCommentTaskCount = unreadTaskCount + unreadProjectCount;
+    } catch (error) {
+      console.error('Error loading unread comment task count:', error);
+      this.unreadCommentTaskCount = 0;
+    }
+  }
+
+  // 未読コメント数を計算（タスク用）
+  private async calculateUnreadCommentCount(task: Task, userId: string): Promise<number> {
+    if (!task.comments || task.comments.length === 0) {
+      return 0;
+    }
+
+    try {
+      const readStatusRef = doc(db, 'commentReadStatus', `${userId}_${task.id}`);
+      const readStatusSnap = await getDoc(readStatusRef);
+      
+      if (!readStatusSnap.exists()) {
+        // 既読状態が存在しない場合、全コメントを未読とする
+        return task.comments.length;
+      }
+
+      const readStatus = readStatusSnap.data();
+      const readCommentIds = new Set(readStatus?.['readCommentIds'] || []);
+      
+      // 未読コメント数を計算
+      const unreadCount = task.comments.filter(comment => !readCommentIds.has(comment.id)).length;
+      return unreadCount;
+    } catch (error) {
+      console.error('Error calculating unread comment count:', error);
+      return 0;
+    }
+  }
+
+  // 未読コメント数を計算（プロジェクト用）
+  private async calculateUnreadCommentCountForProject(project: Project, userId: string): Promise<number> {
+    if (!project.comments || project.comments.length === 0) {
+      return 0;
+    }
+
+    try {
+      const readStatusRef = doc(db, 'commentReadStatus', `${userId}_project_${project.id}`);
+      const readStatusSnap = await getDoc(readStatusRef);
+      
+      if (!readStatusSnap.exists()) {
+        // 既読状態が存在しない場合、全コメントを未読とする
+        return project.comments.length;
+      }
+
+      const readStatus = readStatusSnap.data();
+      const readCommentIds = new Set(readStatus?.['readCommentIds'] || []);
+      
+      // 未読コメント数を計算
+      const unreadCount = project.comments.filter(comment => !readCommentIds.has(comment.id)).length;
+      return unreadCount;
+    } catch (error) {
+      console.error('Error calculating unread comment count for project:', error);
+      return 0;
     }
   }
 
@@ -332,6 +491,10 @@ export class AppComponent implements OnInit, OnDestroy {
     return this.currentRoute.startsWith(route);
   }
 
+  get isTeamInvitationPage(): boolean {
+    return this.currentRoute.startsWith('/team-invitation');
+  }
+
   get isLoggedIn(): boolean {
     return !!this.authService.currentUser;
   }
@@ -352,8 +515,13 @@ export class AppComponent implements OnInit, OnDestroy {
         ? `タスク「${task.title}」の開始日が過ぎています。ステータスを変更してください。`
         : `タスク「${task.title}」の期限が過ぎています。ステータスを変更するか、期限を延長してください。`;
 
+      // チームタスクで担当者未割当の場合は作成者に通知、それ以外は担当者（または現在のユーザー）に通知
+      const notificationUserId = (task.teamId && (!task.assigneeId || task.assigneeId === '')) 
+        ? task.creatorId 
+        : (task.assigneeId || user.uid);
+
       const notificationId = await this.notificationService.createNotification({
-        userId: user.uid,
+        userId: notificationUserId,
         type: NotificationType.TaskOverdue,
         title,
         message,
@@ -364,8 +532,67 @@ export class AppComponent implements OnInit, OnDestroy {
       
       if (notificationId) {
         console.log(`[日付チェック] ${checkType === 'startDate' ? '開始日超過' : '期限切れ'}通知を作成しました: ${notificationId} (タスク: ${task.title})`);
+        
+        // 通知作成成功時、dateCheckedAtを更新（1日1回のみ通知するため）
+        // ただし、開始日チェックの場合、終了日チェックも必要かもしれないので、
+        // 終了日チェックが必要な場合は更新しない
+        if (checkType === 'startDate') {
+          // 開始日チェックの場合、終了日チェックも必要か確認
+          const checkResult = this.taskService.checkTaskDates(task);
+          if (!checkResult.needsEndDateCheck) {
+            // 終了日チェックが不要な場合のみ更新
+            await this.taskService.markTaskDateChecked(task.id);
+          }
+          // 終了日チェックが必要な場合は更新しない（終了日チェックでも通知を作成するため）
+        } else {
+          // 終了日チェックの場合は更新
+          await this.taskService.markTaskDateChecked(task.id);
+        }
       } else {
         console.warn(`[日付チェック] ${checkType === 'startDate' ? '開始日超過' : '期限切れ'}通知の作成がスキップされました（通知設定で無効化されている可能性があります）(タスク: ${task.title})`);
+      }
+    } catch (error) {
+      console.error(`Error creating ${checkType} notification:`, error);
+    }
+  }
+
+  // プロジェクトの日付チェック通知を作成（必要に応じて）
+  private async createProjectDateCheckNotificationIfNeeded(
+    project: Project, 
+    checkType: 'completion' | 'endDate'
+  ): Promise<void> {
+    const user = this.authService.currentUser;
+    if (!user) return;
+
+    try {
+      const title = checkType === 'completion' 
+        ? 'プロジェクトの完了率が100%になりました'
+        : 'プロジェクトの期限が過ぎています';
+      const message = checkType === 'completion'
+        ? `プロジェクト「${project.name}」の完了率が100%になりました。完了にしますか？`
+        : `プロジェクト「${project.name}」の期限が過ぎています。ステータスを変更するか、期限を延長してください。`;
+
+      // チームプロジェクトで担当者未割当の場合は作成者に通知、それ以外は担当者（または現在のユーザー）に通知
+      const notificationUserId = (project.teamId && (!project.assigneeId || project.assigneeId === '')) 
+        ? project.ownerId 
+        : (project.assigneeId || user.uid);
+
+      const notificationId = await this.notificationService.createNotification({
+        userId: notificationUserId,
+        type: checkType === 'completion' ? NotificationType.ProjectCompleted : NotificationType.ProjectUpdated,
+        title,
+        message,
+        projectId: project.id,
+        checkType: checkType === 'completion' ? 'completion' : 'projectEndDate'
+      });
+      
+      if (notificationId) {
+        console.log(`[プロジェクト日付チェック] ${checkType === 'completion' ? '完了率100%' : '期限切れ'}通知を作成しました: ${notificationId} (プロジェクト: ${project.name}, 通知先: ${notificationUserId})`);
+        
+        // 通知作成成功時、dateCheckedAtを更新（1日1回のみ通知するため）
+        await this.projectService.markProjectDateChecked(project.id);
+      } else {
+        console.warn(`[プロジェクト日付チェック] ${checkType === 'completion' ? '完了率100%' : '期限切れ'}通知の作成がスキップされました（通知設定で無効化されている可能性があります）(プロジェクト: ${project.name})`);
       }
     } catch (error) {
       console.error(`Error creating ${checkType} notification:`, error);
@@ -405,10 +632,18 @@ export class AppComponent implements OnInit, OnDestroy {
         const endDate = task.endDate.toDate();
         const endTime = endDate.getHours() * 3600 + endDate.getMinutes() * 60 + endDate.getSeconds();
         const endTimeMax = 23 * 3600 + 59 * 60 + 59; // 23:59:59
-        const needsEndDateCheck = (task.status === TaskStatus.NotStarted || task.status === TaskStatus.InProgress) &&
-                                  (endTime === endTimeMax ? 
-                                    endDate.getTime() < today.getTime() : 
-                                    endDate.getTime() < now.getTime());
+        let needsEndDateCheck = false;
+        if (endTime === endTimeMax) {
+          // 終了日の翌日の00:00:00と比較
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          needsEndDateCheck = (task.status === TaskStatus.NotStarted || task.status === TaskStatus.InProgress) &&
+                              endDate.getTime() < tomorrow.getTime();
+        } else {
+          // 時刻も含めて比較
+          needsEndDateCheck = (task.status === TaskStatus.NotStarted || task.status === TaskStatus.InProgress) &&
+                              endDate.getTime() < now.getTime();
+        }
         if (needsEndDateCheck) {
           shouldShowModal = true;
         }
@@ -416,7 +651,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
       if (!shouldShowModal) {
         // 日付が過ぎていない、またはステータスが既に変更されている場合は、すでに処理済みとして扱う
-        alert('すでにステータスを変更しています');
+        alert('すでに処理済みです');
         return;
       }
 
@@ -426,6 +661,68 @@ export class AppComponent implements OnInit, OnDestroy {
     } catch (error) {
       console.error('Error showing date check modal from notification:', error);
       alert('タスクの読み込みに失敗しました');
+    }
+  }
+
+  // 通知からプロジェクト日付チェックモーダルを表示（通知クリック時に呼び出される）
+  async showProjectDateCheckModalFromNotification(projectId: string, checkType: 'completion' | 'projectEndDate') {
+    try {
+      const project = await this.projectService.getProject(projectId);
+      if (!project) {
+        alert('プロジェクトが見つかりません');
+        return;
+      }
+
+      // 通知からモーダルを表示する場合は、dateCheckedAtを無視して日付が過ぎているかだけをチェック
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      let shouldShowModal = false;
+      
+      if (checkType === 'completion') {
+        // 完了率100%チェック: 完了率が100%で未完了
+        if (project.completionRate === 100 && project.status !== ProjectStatus.Completed) {
+          shouldShowModal = true;
+        }
+      } else if (checkType === 'projectEndDate') {
+        // 終了日チェック: 未完了で終了日時を過ぎている
+        const endDate = project.endDate.toDate();
+        const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+        const endTime = endDate.getHours() * 3600 + endDate.getMinutes() * 60 + endDate.getSeconds();
+        const endTimeMax = 23 * 3600 + 59 * 60 + 59; // 23:59:59
+        if (project.status !== ProjectStatus.Completed) {
+          if (endTime === endTimeMax) {
+            // 終了日の翌日の00:00:00と比較
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            if (endDateOnly < tomorrow) {
+              shouldShowModal = true;
+            }
+          } else {
+            // 時刻も含めて比較
+            if (endDate.getTime() < now.getTime()) {
+              shouldShowModal = true;
+            }
+          }
+        }
+      }
+
+      if (!shouldShowModal) {
+        // 日付が過ぎていない、またはステータスが既に変更されている場合は、すでに処理済みとして扱う
+        alert('すでに処理済みです');
+        return;
+      }
+
+      // まだチェックが必要な場合はモーダルを表示
+      this.currentConfirmationProject = { project, type: checkType === 'completion' ? 'completion' : 'endDate' };
+      if (checkType === 'completion') {
+        this.showProjectCompletionConfirmation = true;
+      } else {
+        this.showProjectEndDateConfirmation = true;
+      }
+    } catch (error) {
+      console.error('Error showing project date check modal from notification:', error);
+      alert('プロジェクトの読み込みに失敗しました');
     }
   }
 
@@ -439,49 +736,54 @@ export class AppComponent implements OnInit, OnDestroy {
         return;
       }
 
-      // 既にモーダルが表示されている場合は、新しいチェックをスキップ
-      if (this.showStatusConfirmation || this.pendingTasks.length > 0) {
+      // 既にモーダルが表示されている場合、処理中のタスクがある場合、または処理中フラグが立っている場合は、新しいチェックをスキップ
+      if (this.showStatusConfirmation || this.currentConfirmationTask !== null || this.isProcessingTask) {
         console.log('[日付チェック] 既にモーダルが表示されているか、処理中のタスクがあるため、スキップします');
         return;
       }
 
+      // 担当者が自分のタスク、またはチームタスクで担当者未割当で作成者が自分のタスクを取得
       const allTasks = await this.taskService.getTasks({
-        assigneeId: user.uid,
         isDeleted: false
       });
-      console.log(`[日付チェック] 全タスク数: ${allTasks.length}`);
 
-      // チェックが必要なタスクを収集
-      this.pendingTasks = [];
+      // フィルタリング: 担当者が自分のタスク、またはチームタスクで担当者未割当で作成者が自分のタスク
+      const filteredTasks = allTasks.filter(task => {
+        // 担当者が自分のタスク
+        if (task.assigneeId === user.uid) {
+          return true;
+        }
+        // チームタスクで担当者未割当で作成者が自分のタスク
+        if (task.teamId && (!task.assigneeId || task.assigneeId === '') && task.creatorId === user.uid) {
+          return true;
+        }
+        return false;
+      });
       
-      for (const task of allTasks) {
+      console.log(`[日付チェック] 全タスク数: ${allTasks.length}, フィルタ後: ${filteredTasks.length}`);
+
+      // チェックが必要なタスクに対して通知を作成（モーダル表示は通知から行う）
+      let notificationCount = 0;
+      
+      for (const task of filteredTasks) {
         // 日付チェック（dateCheckedAtを考慮、1日1回のみ）
         const checkResult = this.taskService.checkTaskDates(task);
         console.log(`[日付チェック] タスク「${task.title}」: needsStartDateCheck=${checkResult.needsStartDateCheck}, needsEndDateCheck=${checkResult.needsEndDateCheck}, dateCheckedAt=${task.dateCheckedAt ? task.dateCheckedAt.toDate().toLocaleString('ja-JP') : '未設定'}`);
         
         if (checkResult.needsStartDateCheck) {
-          // 通知作成はモーダル表示時に行うため、ここではタスクを収集するだけ
-          this.pendingTasks.push({ task, checkType: 'startDate' });
-        } else if (checkResult.needsEndDateCheck) {
-          // 通知作成はモーダル表示時に行うため、ここではタスクを収集するだけ
-          this.pendingTasks.push({ task, checkType: 'endDate' });
+          // 通知作成のみ（モーダル表示は通知から行う）
+          await this.createDateCheckNotificationIfNeeded(task, 'startDate');
+          notificationCount++;
+        }
+        if (checkResult.needsEndDateCheck) {
+          // 通知作成のみ（モーダル表示は通知から行う）
+          // 開始日チェックと終了日チェックの両方が必要な場合、両方の通知を作成
+          await this.createDateCheckNotificationIfNeeded(task, 'endDate');
+          notificationCount++;
         }
       }
 
-      console.log(`[日付チェック] チェックが必要なタスク数: ${this.pendingTasks.length}`);
-
-      // 最初のタスクの確認モーダルを表示
-      if (this.pendingTasks.length > 0) {
-        const firstTask = this.pendingTasks[0];
-        // モーダル表示前に通知を作成
-        await this.createDateCheckNotificationIfNeeded(firstTask.task, firstTask.checkType);
-        
-        this.currentConfirmationTask = firstTask;
-        this.showStatusConfirmation = true;
-        console.log('[日付チェック] モーダルを表示します');
-      } else {
-        console.log('[日付チェック] チェックが必要なタスクはありません');
-      }
+      console.log(`[日付チェック] 通知を作成したタスク数: ${notificationCount}`);
     } catch (error) {
       console.error('[日付チェック] Error checking task dates:', error);
     }
@@ -497,9 +799,10 @@ export class AppComponent implements OnInit, OnDestroy {
         return;
       }
 
-      // 既にモーダルが表示されている場合は、新しいチェックをスキップ
-      if (this.showProjectCompletionConfirmation || this.showProjectEndDateConfirmation) {
-        console.log('[プロジェクト日付チェック] 既にモーダルが表示されているため、スキップします');
+      // 既にモーダルが表示されている場合、処理中のプロジェクトがある場合、または処理中フラグが立っている場合は、新しいチェックをスキップ
+      if (this.showProjectCompletionConfirmation || this.showProjectEndDateConfirmation || 
+          this.currentConfirmationProject !== null || this.isProcessingProject) {
+        console.log('[プロジェクト日付チェック] 既にモーダルが表示されているか、処理中のプロジェクトがあるため、スキップします');
         return;
       }
 
@@ -507,13 +810,8 @@ export class AppComponent implements OnInit, OnDestroy {
       const allProjects = await this.projectService.getProjectsForUser(user.uid);
       console.log(`[プロジェクト日付チェック] 全プロジェクト数: ${allProjects.length}`);
 
-      // 管理者または担当者かチェック（一度だけ取得）
-      const userData = await this.authService.getUserData(user.uid);
-      const isAdmin = userData?.role === 'admin';
-
-      // チェックが必要なプロジェクトを収集
-      this.pendingProjects = [];
-      const endDateProjects: { project: Project; type: 'endDate' }[] = [];
+      // チェックが必要なプロジェクトに対して通知を作成（モーダル表示は通知から行う）
+      let notificationCount = 0;
       
       for (const project of allProjects) {
         // 開始日チェック（自動で準備中→進行中に変更）
@@ -524,41 +822,46 @@ export class AppComponent implements OnInit, OnDestroy {
         const endDate = project.endDate.toDate();
         const isEndDatePassed = endDate.getTime() < now.getTime();
         
-        // 管理者または担当者かチェック
+        // 担当者または作成者かチェック
         const isAssignee = project.assigneeId === user.uid;
-        const canConfirm = isAdmin || isAssignee;
+        // 個人プロジェクトの場合はオーナー、チームプロジェクトで担当者未割当の場合は作成者もチェック対象
+        const isCreator = project.ownerId === user.uid && 
+                          (!project.teamId || !project.assigneeId || project.assigneeId === '');
+        const canConfirm = isAssignee || isCreator;
         
-        if (project.status !== ProjectStatus.Completed && canConfirm) {
-          // 完了率100%で終了日経過の場合は終了日経過時のモーダルのみ（完了率100%チェックはスキップ）
+        // 今日既にチェック済みか確認（日付のみで判断）
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        let isAlreadyCheckedToday = false;
+        if (project.dateCheckedAt) {
+          const checkedDate = project.dateCheckedAt.toDate();
+          const checkedDateOnly = new Date(checkedDate.getFullYear(), checkedDate.getMonth(), checkedDate.getDate());
+          if (checkedDateOnly.getTime() === today.getTime()) {
+            // 今日既にチェック済み
+            isAlreadyCheckedToday = true;
+          }
+        }
+        
+        if (project.status !== ProjectStatus.Completed && canConfirm && !isAlreadyCheckedToday) {
+          // 完了率100%で終了日経過の場合は終了日経過時の通知のみ（完了率100%チェックはスキップ）
           if (project.completionRate === 100 && isEndDatePassed) {
-            endDateProjects.push({ project, type: 'endDate' });
+            // 通知作成のみ（モーダル表示は通知から行う）
+            await this.createProjectDateCheckNotificationIfNeeded(project, 'endDate');
+            notificationCount++;
           } else if (project.completionRate === 100 && !isEndDatePassed) {
-            // 完了率100%で終了日未経過の場合のみ完了確認モーダル
-            this.pendingProjects.push({ project, type: 'completion' });
+            // 完了率100%で終了日未経過の場合のみ完了確認通知
+            // 通知作成のみ（モーダル表示は通知から行う）
+            await this.createProjectDateCheckNotificationIfNeeded(project, 'completion');
+            notificationCount++;
           } else if (project.completionRate < 100 && isEndDatePassed) {
             // 完了率100%未満で終了日経過の場合
-            endDateProjects.push({ project, type: 'endDate' });
+            // 通知作成のみ（モーダル表示は通知から行う）
+            await this.createProjectDateCheckNotificationIfNeeded(project, 'endDate');
+            notificationCount++;
           }
         }
       }
 
-      // 終了日経過のプロジェクトを追加（完了率100%のものは優先度が高いので先に処理）
-      this.pendingProjects = [...this.pendingProjects, ...endDateProjects];
-
-      console.log(`[プロジェクト日付チェック] チェックが必要なプロジェクト数: ${this.pendingProjects.length}`);
-
-      // 最初のプロジェクトの確認モーダルを表示
-      if (this.pendingProjects.length > 0) {
-        const firstProject = this.pendingProjects[0];
-        this.currentConfirmationProject = firstProject;
-        if (firstProject.type === 'completion') {
-          this.showProjectCompletionConfirmation = true;
-          console.log('[プロジェクト日付チェック] 完了率100%モーダルを表示します');
-        } else {
-          this.showProjectEndDateConfirmation = true;
-          console.log('[プロジェクト日付チェック] 終了日経過モーダルを表示します');
-        }
-      }
+      console.log(`[プロジェクト日付チェック] 通知を作成したプロジェクト数: ${notificationCount}`);
     } catch (error) {
       console.error('[プロジェクト日付チェック] Error checking project dates:', error);
     }
@@ -574,6 +877,8 @@ export class AppComponent implements OnInit, OnDestroy {
       // ステータスを進行中に変更した場合、同じタスクの終了日チェックも実行
       if (this.currentConfirmationTask) {
         try {
+          // 状態更新の完了を待つ
+          await new Promise(resolve => setTimeout(resolve, 100)); // 少し待ってからタスクを再取得
           const updatedTask = await this.taskService.getTask(this.currentConfirmationTask.task.id);
           if (updatedTask) {
             const checkResult = this.taskService.checkTaskDates(updatedTask);
@@ -589,38 +894,61 @@ export class AppComponent implements OnInit, OnDestroy {
         }
       }
       // 終了日チェックが不要な場合は次のタスクに進む
-      this.processNextTask();
+      await this.processNextTask();
     } else {
       // 完了に変更した場合や無視など
       // app.componentは主にモーダル表示のみで、実際の再読み込みは各ページコンポーネントで行う
       // 次のタスクの確認に進む
-      this.processNextTask();
+      await this.processNextTask();
     }
   }
 
   // ステータス変更確認モーダルを閉じる
-  onConfirmationClosed() {
-    this.processNextTask();
+  async onConfirmationClosed() {
+    // モーダルを閉じた時、dateCheckedAtを更新（念のため）
+    // ただし、開始日チェックで進行中に変更した場合は、既に更新済みなのでスキップ
+    if (this.currentConfirmationTask) {
+      const task = this.currentConfirmationTask.task;
+      const checkType = this.currentConfirmationTask.checkType;
+      
+      try {
+        // 現在のタスクの状態を取得
+        const currentTask = await this.taskService.getTask(task.id);
+        if (currentTask) {
+          // 終了日チェックの場合、または開始日チェックで完了/無視した場合は更新
+          if (checkType === 'endDate') {
+            await this.taskService.markTaskDateChecked(task.id);
+          } else if (checkType === 'startDate') {
+            // 開始日チェックの場合、現在のステータスを確認
+            if (currentTask.status === TaskStatus.NotStarted) {
+              // まだ未着手の場合は更新（無視した場合）
+              await this.taskService.markTaskDateChecked(task.id);
+            }
+            // 進行中に変更した場合は更新しない（既に更新済み、または終了日チェックも必要）
+          }
+        }
+      } catch (error) {
+        console.error('Error updating dateCheckedAt on close:', error);
+      }
+    }
+    await this.processNextTask();
   }
 
-  // 次のタスクを処理
-  processNextTask() {
-    if (this.pendingTasks.length > 0) {
-      this.pendingTasks.shift(); // 処理済みのタスクを削除
-    }
+  // モーダルを閉じる（通知からのモーダル表示用）
+  async processNextTask() {
+    // 処理中フラグを立てる
+    this.isProcessingTask = true;
+    
+    try {
+      // 現在のタスクの状態更新が完了するまで少し待つ
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-    if (this.pendingTasks.length > 0) {
-      // 次のタスクのモーダルを表示
-      const nextTask = this.pendingTasks[0];
-      // モーダル表示前に通知を作成
-      this.createDateCheckNotificationIfNeeded(nextTask.task, nextTask.checkType).then(() => {
-        this.currentConfirmationTask = nextTask;
-        this.showStatusConfirmation = true;
-      });
-    } else {
-      // すべてのタスクを処理完了
+      // モーダルを閉じる（通知からのモーダル表示は1つずつなので、次のタスクはない）
       this.currentConfirmationTask = null;
       this.showStatusConfirmation = false;
+    } finally {
+      // 処理中フラグを下ろす
+      this.isProcessingTask = false;
     }
   }
 
@@ -636,12 +964,12 @@ export class AppComponent implements OnInit, OnDestroy {
     // 終了日変更モーダルを閉じる（タスク詳細画面に遷移しているので、ここでは閉じるだけ）
     this.showEndDateChange = false;
     // 次のタスクの確認に進む
-    this.processNextTask();
+    await this.processNextTask();
   }
 
   // プロジェクト完了確認のアクション処理
   async onProjectCompletionAction(action: ProjectCompletionAction) {
-    this.processNextProject();
+    await this.processNextProject();
   }
 
   // プロジェクト終了日確認のアクション処理
@@ -656,53 +984,58 @@ export class AppComponent implements OnInit, OnDestroy {
       }
     } else {
       // 完了または無視の場合
-      this.processNextProject();
+      await this.processNextProject();
     }
   }
 
   // プロジェクト確認モーダルを閉じる
-  onProjectConfirmationClosed() {
-    this.processNextProject();
+  async onProjectConfirmationClosed() {
+    // モーダルを閉じた時、dateCheckedAtを更新（念のため）
+    if (this.currentConfirmationProject) {
+      const project = this.currentConfirmationProject.project;
+      const checkType = this.currentConfirmationProject.type;
+      try {
+        const currentProject = await this.projectService.getProject(project.id);
+        if (currentProject) {
+          if (checkType === 'endDate') {
+            await this.projectService.markProjectDateChecked(project.id);
+          } else if (checkType === 'completion') {
+            if (currentProject.status !== ProjectStatus.Completed) {
+              // まだ完了していない場合は更新（無視した場合）
+              await this.projectService.markProjectDateChecked(project.id);
+            }
+            // 完了に変更した場合は更新しない（既に更新済み）
+          }
+        }
+      } catch (error) {
+        console.error('Error updating dateCheckedAt on close:', error);
+      }
+    }
+    await this.processNextProject();
   }
 
-  // 次のプロジェクトを処理
-  processNextProject() {
-    if (this.pendingProjects.length > 0) {
-      this.pendingProjects.shift(); // 処理済みのプロジェクトを削除
-    }
+  // モーダルを閉じる（通知からのモーダル表示用）
+  async processNextProject() {
+    // 処理中フラグを立てる
+    this.isProcessingProject = true;
+    
+    try {
+      // 現在のプロジェクトの状態更新が完了するまで少し待つ
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-    if (this.pendingProjects.length > 0) {
-      // 次のプロジェクトのモーダルを表示
-      const nextProject = this.pendingProjects[0];
-      this.currentConfirmationProject = nextProject;
-      if (nextProject.type === 'completion') {
-        this.showProjectCompletionConfirmation = true;
-        this.showProjectEndDateConfirmation = false;
-      } else {
-        this.showProjectCompletionConfirmation = false;
-        this.showProjectEndDateConfirmation = true;
-      }
-    } else {
-      // すべてのプロジェクトを処理完了
+      // モーダルを閉じる（通知からのモーダル表示は1つずつなので、次のプロジェクトはない）
       this.currentConfirmationProject = null;
       this.showProjectCompletionConfirmation = false;
       this.showProjectEndDateConfirmation = false;
-    }
-  }
-
-  // Service Workerを登録
-  private async registerServiceWorker(): Promise<void> {
-    if ('serviceWorker' in navigator) {
-      try {
-        await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-      } catch (error) {
-        console.error('Service Worker registration failed:', error);
-      }
+    } finally {
+      // 処理中フラグを下ろす
+      this.isProcessingProject = false;
     }
   }
 
   // FCMを初期化（通知許可をリクエストし、トークンを取得）
   private async initializeFcm(): Promise<void> {
+    console.log('[FCM] initializeFcm() called');
     try {
       // 通知許可をリクエストし、トークンを取得
       const token = await this.fcmService.requestPermission();
@@ -710,14 +1043,34 @@ export class AppComponent implements OnInit, OnDestroy {
       if (token) {
         // フォアグラウンドメッセージのリスナーを設定
         this.fcmService.setupForegroundMessageListener((payload) => {
-          // フォアグラウンドで通知を表示（オプション）
-          // ブラウザの通知APIを使用して表示することも可能
-          if (payload.notification) {
-            new Notification(payload.notification.title || 'タスクリマインダー', {
-              body: payload.notification.body || '',
-              icon: '/favicon.ico',
-              badge: '/favicon.ico'
-            });
+          console.log('[FCM] Foreground message received:', payload);
+          
+          // 通知を表示
+          const notificationTitle = payload.notification?.title || 'お知らせ';
+          const notificationOptions: NotificationOptions = {
+            body: payload.notification?.body || payload.data?.message || '',
+            icon: '/favicon.ico',
+            badge: '/favicon.ico',
+            data: payload.data || {}
+          };
+          
+          // ブラウザの通知APIを使用して通知を表示
+          if ('Notification' in window && Notification.permission === 'granted') {
+            const notification = new Notification(notificationTitle, notificationOptions);
+            
+            // 通知クリック時の処理
+            notification.onclick = (event) => {
+              event.preventDefault();
+              window.focus();
+              
+              // 通知のデータからURLを取得して遷移
+              const url = payload.data?.url || '/home';
+              if (url) {
+                window.location.href = url;
+              }
+              
+              notification.close();
+            };
           }
         });
       } else {

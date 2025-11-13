@@ -11,7 +11,7 @@
           <button class="edit-btn" *ngIf="canEdit" (click)="openEditModal()">編集</button>
           <button class="duplicate-btn" (click)="onDuplicate()">複製</button>
           <button class="delete-btn" *ngIf="canEdit" (click)="openDeleteModal()">削除</button>
-          <button class="create-task-btn" *ngIf="!isFromArchive" (click)="createTask()">+ タスク作成</button>
+          <button class="create-task-btn" *ngIf="!isFromArchive && canCreateTask" (click)="createTask()">+ タスク作成</button>
         </div>
         <div class="progress-info">
           <div class="progress-bar">
@@ -60,7 +60,7 @@
         <div *ngFor="let task of tasks" class="task-card" (click)="viewTask(task.id)">
           <div class="task-header">
             <h3>{{ task.title }}</h3>
-            <span class="status-badge status-{{ task.status }}">{{ getStatusLabel(task.status) }}</span>
+            <span class="status-badge status-{{ task.status }}">{{ getTaskStatusLabel(task.status) }}</span>
           </div>
           <p *ngIf="task.description">{{ task.description }}</p>
           <div class="task-meta">
@@ -91,26 +91,17 @@
         <div *ngFor="let member of project.members" class="member-card">
           <div class="member-info">
             <div class="member-name">{{ member.userName }}</div>
-            <div class="member-email">{{ member.userEmail }}</div>
+            <div class="member-email" *ngIf="canManageMembers">{{ member.userEmail }}</div>
+            <!--<div class="member-email" *ngIf="!canManageMembers"></div>-->
             <div class="member-role">
               <span *ngIf="project.ownerId === member.userId" class="role-badge owner">オーナー</span>
-              <span *ngIf="project.ownerId !== member.userId" class="role-badge role-{{ member.role }}">
+              <span *ngIf="project.ownerId !== member.userId && project.assigneeId === member.userId" class="role-badge assignee">担当者</span>
+              <span *ngIf="project.ownerId !== member.userId && project.assigneeId !== member.userId" class="role-badge role-{{ member.role }}">
                 {{ getRoleLabel(member.role) }}
               </span>
             </div>
           </div>
           <div class="member-actions" *ngIf="canManageMembers">
-            <!-- 役割変更（オーナー以外） -->
-            <select 
-              *ngIf="project.ownerId !== member.userId"
-              class="role-select"
-              [ngModel]="member.role"
-              (ngModelChange)="onUpdateMemberRole(member.userId, $event)">
-              <!-- <option [ngValue]="ProjectRole.Admin">プロジェクト管理者</option> --> <!-- 削除 -->
-              <option [ngValue]="ProjectRole.Member">メンバー</option>
-              <option [ngValue]="ProjectRole.Viewer">閲覧者</option>
-            </select>
-            
             <!-- 削除ボタン（オーナー以外、かつ自分以外） -->
             <button 
               *ngIf="project.ownerId !== member.userId && authService.currentUser?.uid !== member.userId"
@@ -119,6 +110,63 @@
               削除
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- コメントセクション -->
+    <div class="comments-section">
+      <div class="comments-header">
+        <h3>コメント
+          <span class="comment-count">（{{ project.comments?.length || 0 }}件</span>
+          <span class="unread-comment-count" *ngIf="unreadCommentCount > 0"> / 未読{{ unreadCommentCount }}件</span>
+          <span class="comment-count">）</span>
+        </h3>
+        <button class="toggle-comments-btn" (click)="toggleCommentsTab()">
+          {{ showCommentsTab ? '閉じる' : '開く' }}
+        </button>
+      </div>
+
+      <div *ngIf="showCommentsTab" class="comments-content">
+        <!-- コメント追加フォーム -->
+        <div class="add-comment">
+          <div class="comment-input-wrapper">
+            <textarea 
+              #commentTextarea
+              [(ngModel)]="newCommentContent"
+              (input)="onCommentInput($event)"
+              (blur)="hideMentionSuggestions()"
+              placeholder="コメントを追加...（@でメンション）"
+              rows="3"></textarea>
+            <!-- メンション候補リスト -->
+            <div *ngIf="showMentionSuggestions && mentionSuggestions.length > 0" class="mention-suggestions">
+              <div 
+                *ngFor="let user of mentionSuggestions" 
+                class="mention-suggestion-item"
+                (mousedown)="selectMention(user); $event.preventDefault()">
+                <span class="mention-name">{{ user.name }}</span>
+                <span class="mention-email">{{ user.email }}</span>
+              </div>
+            </div>
+          </div>
+          <button (click)="addComment()">コメント追加</button>
+        </div>
+
+        <!-- コメント一覧 -->
+        <div class="comments-list" *ngIf="project.comments && project.comments.length > 0">
+          <div *ngFor="let comment of sortedComments" 
+               class="comment-item" 
+               [class.unread-comment]="isCommentUnread(comment.id)">
+            <div class="comment-header">
+              <span class="comment-author">{{ comment.userName }}</span>
+              <span class="comment-date">{{ formatDateTime(comment.createdAt) }}</span>
+              <span class="unread-badge" *ngIf="isCommentUnread(comment.id)">未読</span>
+            </div>
+            <div class="comment-content">{{ comment.content }}</div>
+          </div>
+        </div>
+        <div *ngIf="!project.comments || project.comments.length === 0" class="no-comments">
+          コメントはまだありません
         </div>
       </div>
     </div>
@@ -202,18 +250,6 @@
             <p *ngIf="teamMembers.length === 0" class="info-text">
               チームの全メンバーが既にプロジェクトに追加されています
             </p>
-          </div>
-          <div class="form-group">
-            <label for="roleSelect">役割</label>
-            <select 
-              id="roleSelect"
-              class="form-control"
-              [value]="selectedRole"
-              (change)="selectedRole = $any($event.target).value">
-              <!-- <option [value]="ProjectRole.Admin">プロジェクト管理者</option> --> <!-- 削除 -->
-              <option [value]="ProjectRole.Member">メンバー</option>
-              <option [value]="ProjectRole.Viewer">閲覧者</option>
-            </select>
           </div>
         </div>
         <div class="modal-footer">
@@ -359,7 +395,7 @@
                   [checked]="selectedTaskIdsForDeletion.has(task.id)"
                   (change)="toggleTaskSelection(task.id)">
                 <span>{{ task.title }}</span>
-                <span class="task-status">（{{ getStatusLabel(task.status) }}）</span>
+                <span class="task-status">（{{ getTaskStatusLabel(task.status) }}）</span>
               </label>
             </div>
           </div>

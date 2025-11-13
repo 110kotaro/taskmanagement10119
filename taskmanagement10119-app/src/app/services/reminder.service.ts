@@ -21,6 +21,7 @@ export class ReminderService {
   private notificationService = inject(NotificationService);
   private taskService = inject(TaskService);
   private checkInterval: any = null;
+  private processingReminders: Set<string> = new Set();
 
   startReminderChecking() {
     // 既に開始されている場合は停止
@@ -102,11 +103,31 @@ export class ReminderService {
             }
 
             if (shouldNotify) {
-              // 通知を送信
-              await this.sendReminderNotification(task, reminder, scheduledTime);
+              // 送信中のリマインダーを追跡するキー
+              const reminderKey = `${task.id}_${reminder.id}`;
               
-              // リマインダーを送信済みにマーク
-              await this.markReminderAsSent(task.id, reminder.id);
+              // 既に送信処理中の場合はスキップ（重複送信を防ぐ）
+              if (this.processingReminders.has(reminderKey)) {
+                continue;
+              }
+              
+              // 送信処理中としてマーク
+              this.processingReminders.add(reminderKey);
+              
+              try {
+                // 通知を送信
+                await this.sendReminderNotification(task, reminder, scheduledTime);
+                
+                // リマインダーを送信済みにマーク
+                await this.markReminderAsSent(task.id, reminder.id);
+                
+                // 成功した場合のみSetから削除（Firestoreの更新が反映されるまで保護）
+                this.processingReminders.delete(reminderKey);
+              } catch (error: any) {
+                console.error('Error processing reminder:', error);
+                // 失敗した場合もSetから削除（次回のチェックで再試行できるように）
+                this.processingReminders.delete(reminderKey);
+              }
             }
           }
         }
@@ -194,10 +215,10 @@ export class ReminderService {
       });
 
       // タスクを更新
-      // リマインダー送信時の更新は自動コメントをスキップ（バックグラウンド処理のため）
+      // リマインダー送信時の更新は自動コメントと通知をスキップ（バックグラウンド処理のため）
       await this.taskService.updateTask(taskId, {
         reminders: updatedReminders
-      }, true);
+      }, true, true);
     } catch (error: any) {
       console.error('Error marking reminder as sent:', error);
     }

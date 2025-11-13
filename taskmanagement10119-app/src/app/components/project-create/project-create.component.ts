@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute } from '@angular/router';
+import { Location } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Timestamp } from 'firebase/firestore';
 import { AuthService } from '../../services/auth.service';
@@ -18,6 +19,7 @@ import { Team, TeamMember } from '../../models/team.model';
 export class ProjectCreateComponent implements OnInit {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
+  private location = inject(Location);
   private authService = inject(AuthService);
   private projectService = inject(ProjectService);
   private fb = inject(FormBuilder);
@@ -62,11 +64,25 @@ export class ProjectCreateComponent implements OnInit {
     // localStorageから初期状態を取得
     this.loadViewModeStateFromStorage();
     
+    // チームメンバーを読み込む（viewModeとselectedTeamIdが設定された後）
+    await this.loadTeamMembers();
+    
+    // 個人/チーム切り替えの変更を監視
+    window.addEventListener('viewModeChanged', (event: any) => {
+      if (event.detail) {
+        this.viewMode = event.detail.viewMode;
+        this.selectedTeamId = event.detail.selectedTeamId;
+      }
+      this.loadTeamMembers();
+    });
+    
     // クエリパラメータから複製情報を取得
     const queryParams = this.route.snapshot.queryParamMap;
     
     if (queryParams.get('duplicate') === 'true') {
       this.loadDuplicateData(queryParams);
+      // 複製データ読み込み後にもチームメンバーを読み込む
+      await this.loadTeamMembers();
     }
   }
 
@@ -117,9 +133,6 @@ export class ProjectCreateComponent implements OnInit {
         if (this.viewMode === 'team' && !this.selectedTeamId && this.userTeams.length > 0) {
           this.selectedTeamId = this.userTeams[0].id;
         }
-        
-        // チームメンバーを読み込む
-        await this.loadTeamMembers();
       }
     } catch (error) {
       console.error('Error loading teams:', error);
@@ -167,6 +180,15 @@ export class ProjectCreateComponent implements OnInit {
       this.isCreating = true;
       const formValue = this.createForm.value;
       
+      // 日付のバリデーション
+      const startDate = new Date(formValue.startDate);
+      const endDate = new Date(formValue.endDate);
+      if (endDate.getTime() < startDate.getTime()) {
+        alert('終了日は開始日より後である必要があります');
+        this.isCreating = false;
+        return;
+      }
+      
       // チームモード時のみチーム情報を設定
       let teamId: string | undefined = undefined;
       let teamName: string | undefined = undefined;
@@ -213,7 +235,12 @@ export class ProjectCreateComponent implements OnInit {
   }
 
   goBack() {
-    this.router.navigate(['/projects']);
+    if (window.history.length > 1) {
+      this.location.back();
+    } else {
+      // 履歴がない場合はプロジェクト一覧に戻る
+      this.router.navigate(['/projects']);
+    }
   }
 }
 

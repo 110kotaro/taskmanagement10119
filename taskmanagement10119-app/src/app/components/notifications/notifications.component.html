@@ -1,13 +1,14 @@
 <div class="notifications-container">
   <header class="header">
     <button class="back-btn" (click)="goBack()">← 戻る</button>
-    <h1>お知らせ</h1>
+    <h1>🔔 お知らせ</h1>
   </header>
 
   <main class="main-content">
     <!-- フィルターボタンと一括操作ボタン -->
     <div class="filter-section">
       <div class="filter-buttons">
+        <div class="filter-btn-left">
         <button 
           class="filter-btn" 
           [class.active]="filterType === 'all'"
@@ -26,21 +27,44 @@
           (click)="onFilterChange('read')">
           既読
         </button>
+        </div>
         <button 
-          class="filter-btn" 
+          class="filter-btn-right" 
           [class.active]="filterType === 'trash'"
           (click)="onFilterChange('trash')">
           🗑️ ゴミ箱
         </button>
       </div>
       
-      <!-- 一括既読ボタン（ゴミ箱以外の時のみ表示） -->
+      <!-- 一括操作ボタン -->
       <div *ngIf="filterType !== 'trash' && filteredNotifications.length > 0" class="bulk-actions">
         <button 
           class="bulk-btn bulk-read-btn" 
           (click)="markAllFilteredAsRead()"
           title="すべて既読にする">
           ✓ すべて既読
+        </button>
+        <button 
+          class="bulk-btn bulk-delete-btn" 
+          (click)="deleteAllFiltered()"
+          title="すべて削除する">
+          🗑️ すべて削除
+        </button>
+      </div>
+      
+      <!-- ゴミ箱内の一括操作ボタン -->
+      <div *ngIf="filterType === 'trash' && filteredNotifications.length > 0" class="bulk-actions">
+        <button 
+          class="bulk-btn bulk-restore-btn" 
+          (click)="restoreAllFiltered()"
+          title="すべて復元する">
+          ↶ すべて復元
+        </button>
+        <button 
+          class="bulk-btn bulk-permanent-delete-btn" 
+          (click)="permanentlyDeleteAllFiltered()"
+          title="すべて完全削除する">
+          🗑️ すべて完全削除
         </button>
       </div>
     </div>
@@ -100,12 +124,25 @@
         
         <!-- チーム招待の場合は参加/拒否ボタンを表示（ゴミ箱以外） -->
         <div *ngIf="notification.type === 'team_invitation' && notification.invitationId && filterType !== 'trash'" class="invitation-actions">
+           <!-- 招待が承認済みの場合 -->
+          <div *ngIf="invitationMap[notification.invitationId]?.status === 'accepted'" class="invitation-status accepted">
+           ✓ この招待に参加しました
+          </div>
+  
+           <!-- 招待が拒否済みの場合 -->
+           <div *ngIf="invitationMap[notification.invitationId]?.status === 'rejected'" class="invitation-status rejected">
+             ✗ この招待を拒否しました
+           </div>
+  
+           <!-- 招待が保留中（pending）の場合のみボタンを表示 -->
+         <ng-container *ngIf="invitationMap[notification.invitationId]?.status === 'pending' || !invitationMap[notification.invitationId]">
           <button class="accept-btn" (click)="acceptInvitation(notification); $event.stopPropagation()">
             参加する
           </button>
           <button class="reject-btn" (click)="rejectInvitation(notification); $event.stopPropagation()">
             拒否する
           </button>
+        </ng-container>
         </div>
       </div>
     </div>

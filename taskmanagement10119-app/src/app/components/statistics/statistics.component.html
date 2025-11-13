@@ -1,7 +1,7 @@
 <div class="statistics-container">
   <header class="header">
     <button class="back-btn" (click)="goBack()">← 戻る</button>
-    <h1>📊 統計</h1>
+    <h1>📈 統計</h1>
   </header>
 
   <main class="main-content">
@@ -9,21 +9,52 @@
     <div class="time-range-selector">
       <button 
         class="range-btn" 
-        [class.active]="timeRange === 'week'"
-        (click)="switchTimeRange('week')">
+        [class.active]="timeRange === 'thisWeek'"
+        (click)="switchTimeRange('thisWeek')">
         今週
       </button>
       <button 
         class="range-btn" 
-        [class.active]="timeRange === 'month'"
-        (click)="switchTimeRange('month')">
+        [class.active]="timeRange === 'lastWeek'"
+        (click)="switchTimeRange('lastWeek')">
+        先週
+      </button>
+      <button 
+        class="range-btn" 
+        [class.active]="timeRange === 'thisMonth'"
+        (click)="switchTimeRange('thisMonth')">
         今月
       </button>
+      <button 
+        class="range-btn" 
+        [class.active]="timeRange === 'lastMonth'"
+        (click)="switchTimeRange('lastMonth')">
+        先月
+      </button>
+      <button 
+        class="range-btn" 
+        [class.active]="timeRange === 'last3Months'"
+        (click)="switchTimeRange('last3Months')">
+        過去3か月
+      </button>
+      <button 
+        class="range-btn" 
+        [class.active]="timeRange === 'custom'"
+        (click)="switchTimeRange('custom')">
+        カスタム
+      </button>
+    </div>
+
+    <!-- 表示期間の明示 -->
+    <div class="date-range-display" *ngIf="!isLoading">
+      <span class="date-range-label">表示期間: {{ getDateRangeLabel() }}</span>
     </div>
 
     <!-- 判定パターンの切り替え -->
     <div class="filter-pattern-selector">
-      <label class="pattern-label">判定基準：</label>
+      <label class="pattern-label">
+        判定基準：
+      </label>
       <button 
         class="pattern-btn" 
         [class.active]="filterPattern === 'endDate'"
@@ -43,6 +74,9 @@
         重複ベース
       </button>
     </div>
+    <span class="filter-pattern-selector-item">
+      (判定基準について：期限日基準は表示期間に期限日のみが含まれる、開始日基準は表示期間に開始日のみが含まれる、重複ベースはタスクの期間が表示期間と少しでも重なっている時にカウントされます。)
+    </span>
 
     <div *ngIf="isLoading" class="loading">読み込み中...</div>
 
@@ -164,5 +198,45 @@
       </section>
     </div>
   </main>
+
+  <!-- カスタム期間選択モーダル -->
+  <div class="modal-overlay" *ngIf="showCustomRangeModal" (click)="closeCustomRangeModal()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>カスタム期間を選択</h2>
+        <button class="close-btn" (click)="closeCustomRangeModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="customStartDate">開始日 *</label>
+          <input
+            type="date"
+            id="customStartDate"
+            class="form-control"
+            [(ngModel)]="customStartDate"
+            required>
+        </div>
+        <div class="form-group">
+          <label for="customEndDate">終了日 *</label>
+          <input
+            type="date"
+            id="customEndDate"
+            class="form-control"
+            [(ngModel)]="customEndDate"
+            required>
+        </div>
+        <div class="form-group">
+          <p class="help-text">カスタム期間は最長92日間まで設定できます。</p>
+        </div>
+        <div class="error-message" *ngIf="customRangeError">
+          {{ customRangeError }}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeCustomRangeModal()">キャンセル</button>
+        <button class="btn btn-primary" (click)="applyCustomRange()">適用</button>
+      </div>
+    </div>
+  </div>
 </div>
 

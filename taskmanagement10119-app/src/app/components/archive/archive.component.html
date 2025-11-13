@@ -1,7 +1,7 @@
 <div class="archive-container">
   <header class="header">
     <button class="back-btn" (click)="goBack()">← 戻る</button>
-    <h1>📦 アーカイブ</h1>
+    <h1>📦 アーカイブ（削除済み、完了済み）</h1>
   </header>
 
   <main class="main-content">
@@ -70,7 +70,7 @@
         <div *ngIf="dateFilterEnabled" class="filter-group">
           <label>フィルター条件:</label>
           <select [(ngModel)]="dateFilterType" (change)="onFilterChange()">
-            <option value="deleted">削除日時</option>
+            <option value="deleted">削除日</option>
             <option value="completed">完了日</option>
           </select>
         </div>
@@ -87,7 +87,7 @@
         <div class="filter-group sort-group">
           <label>ソート順:</label>
           <button class="sort-order-btn" (click)="toggleSortOrder()">
-            {{ sortOrder === 'asc' ? '↑' : '↓' }}
+            {{ sortOrder === 'asc' ? '昇順 ↑ ' : '降順 ↓ ' }}
           </button>
         </div>
       </div>
@@ -107,7 +107,7 @@
           選択した{{ selectedItems.size }}件を復元
         </button>
         <button 
-          *ngIf="selectedItems.size > 0 && currentUserRole === 'admin'"
+          *ngIf="selectedItems.size > 0 && hasPermanentlyDeletePermissionForSelectedItemsSync"
           class="delete-selected-btn" 
           (click)="permanentlyDeleteSelectedItems()">
           選択した{{ selectedItems.size }}件を完全削除
@@ -142,7 +142,7 @@
                 復元
               </button>
               <button 
-                *ngIf="currentUserRole === 'admin'"
+                *ngIf="item.canPermanentlyDelete"
                 class="delete-btn" 
                 (click)="permanentlyDeleteItem(item)">
                 完全削除
@@ -150,7 +150,7 @@
             </div>
           </div>
           <div class="item-details">
-            <div class="detail-row" *ngIf="item.type === 'task' && item.status">
+            <div class="detail-row" *ngIf="item.status">
               <span class="detail-label">ステータス:</span>
               <span class="detail-value">{{ getStatusLabel(item.status) }}</span>
             </div>

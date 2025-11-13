@@ -28,25 +28,51 @@ export const checkReminders = functions.pubsub
         const user = userDoc.data();
         const userId = userDoc.id;
         const fcmToken = user.fcmToken;
+        const notificationSettings = user.notificationSettings || {};
 
         if (!fcmToken) {
           continue; // FCMトークンがない場合はスキップ
         }
 
-        // ユーザーのタスクを取得
+        // リマインダーのWebPush通知設定をチェック
+        // カテゴリ設定（reminderWebPush）と個別設定（taskReminderWebPush）の両方が有効である必要がある
+        const reminderWebPushEnabled = notificationSettings.reminderWebPush !== false;
+        const taskReminderWebPushEnabled = notificationSettings.taskReminderWebPush !== false;
+        const shouldSendReminderWebPush = reminderWebPushEnabled && taskReminderWebPushEnabled;
+
+        if (!shouldSendReminderWebPush) {
+          console.log(
+            `[checkReminders] User ${userId} has reminder WebPush notifications disabled`
+          );
+          // WebPush通知は送信しないが、通知レコードは作成する（アプリ内通知は表示される）
+        }
+
+        // ユーザーのタスクを取得（担当者が自分のタスク、またはチームタスクで担当者未割当で作成者が自分のタスク）
         const tasksSnapshot = await db.collection("tasks")
-          .where("assigneeId", "==", userId)
           .where("isDeleted", "==", false)
           .get();
 
-        for (const taskDoc of tasksSnapshot.docs) {
-          const task = taskDoc.data();
-          const taskId = taskDoc.id;
+        // フィルタリング: 担当者が自分のタスク、またはチームタスクで担当者未割当で作成者が自分のタスク
+        const userTasks = tasksSnapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter((task: any) => {
+            // タスクが完了している場合はスキップ
+            if (task.status === "completed") {
+              return false;
+            }
+            // 担当者が自分のタスク
+            if (task.assigneeId === userId) {
+              return true;
+            }
+            // チームタスクで担当者未割当で作成者が自分のタスク
+            if (task.teamId && (!task.assigneeId || task.assigneeId === '') && task.creatorId === userId) {
+              return true;
+            }
+            return false;
+          });
 
-          // タスクが完了している場合はスキップ
-          if (task.status === "completed") {
-            continue;
-          }
+        for (const task of userTasks) {
+          const taskId = task.id;
 
           // リマインダーはタスク内の配列として保存されている
           const reminders = task.reminders || [];
@@ -121,46 +147,71 @@ export const checkReminders = functions.pubsub
                 message = `タスク「${taskTitle}」のリマインダーです`;
               }
 
-              // Push通知を送信
-              const fcmMessage = {
-                notification: {
-                  title: "タスクリマインダー",
-                  body: message,
-                },
-                data: {
-                  taskId: taskId,
-                  type: "task_reminder",
-                  url: `/task/${taskId}`,
-                },
-                token: fcmToken,
-              };
+              // お知らせ欄への通知設定をチェック
+              // カテゴリ設定（reminder）と個別設定（taskReminder）の両方が有効である必要がある
+              const reminderEnabled = notificationSettings.reminder !== false;
+              const taskReminderEnabled = notificationSettings.taskReminder !== false;
+              const shouldCreateNotification = reminderEnabled && taskReminderEnabled;
 
-              try {
-                await admin.messaging().send(fcmMessage);
+              // WebPush通知を送信（設定が有効な場合のみ）
+              if (shouldSendReminderWebPush) {
+                const fcmMessage = {
+                  notification: {
+                    title: "タスクリマインダー",
+                    body: message,
+                  },
+                  data: {
+                    taskId: taskId,
+                    type: "task_reminder",
+                    url: `/task/${taskId}`,
+                  },
+                  token: fcmToken,
+                };
 
-                // リマインダーを送信済みにマーク
-                const updatedReminders = reminders.map((r: {
-                  id: string;
-                  sent?: boolean;
-                  sentAt?: admin.firestore.Timestamp;
-                  [key: string]: unknown;
-                }) => {
-                  if (r.id === reminder.id) {
-                    return {
-                      ...r,
-                      sent: true,
-                      sentAt: admin.firestore.FieldValue.serverTimestamp(),
-                    };
-                  }
-                  return r;
-                });
+                try {
+                  console.log(
+                    `[checkReminders] 送信するFCMトークン: ${fcmToken}`
+                  );
+                  await admin.messaging().send(fcmMessage);
+                  console.log(
+                    `[checkReminders] WebPush reminder sent to user ${userId} for task ${taskId}`
+                  );
+                } catch (error) {
+                  console.error(
+                    `[checkReminders] Error sending WebPush reminder to user ${userId}:`,
+                    error
+                  );
+                }
+              } else {
+                console.log(
+                  `[checkReminders] WebPush reminder skipped for user ${userId} (settings disabled)`
+                );
+              }
 
-                // タスクを更新
-                await db.collection("tasks").doc(taskId).update({
-                  reminders: updatedReminders,
-                });
+              // リマインダーを送信済みにマーク
+              const updatedReminders = reminders.map((r: {
+                id: string;
+                sent?: boolean;
+                sentAt?: admin.firestore.Timestamp;
+                [key: string]: unknown;
+              }) => {
+                if (r.id === reminder.id) {
+                  return {
+                    ...r,
+                    sent: true,
+                    sentAt: admin.firestore.FieldValue.serverTimestamp(),
+                  };
+                }
+                return r;
+              });
 
-                // Firestoreに通知レコードを作成
+              // タスクを更新
+              await db.collection("tasks").doc(taskId).update({
+                reminders: updatedReminders,
+              });
+
+              // Firestoreに通知レコードを作成（お知らせ欄への通知設定が有効な場合のみ）
+              if (shouldCreateNotification) {
                 await db.collection("notifications").add({
                   userId: userId,
                   type: "task_reminder",
@@ -173,12 +224,11 @@ export const checkReminders = functions.pubsub
                 });
 
                 console.log(
-                  `Reminder sent to user ${userId} for task ${taskId}`
+                  `[checkReminders] Reminder notification created for user ${userId} for task ${taskId}`
                 );
-              } catch (error) {
-                console.error(
-                  `Error sending reminder to user ${userId}:`,
-                  error
+              } else {
+                console.log(
+                  `[checkReminders] Notification record skipped for user ${userId} (settings disabled)`
                 );
               }
             }
@@ -442,6 +492,10 @@ export const onNotificationCreated = functions.firestore
             token: fcmToken,
           };
 
+          console.log(
+            "[onNotificationCreated] 送信するFCMトークン:",
+            fcmToken
+          );
           await admin.messaging().send(fcmMessage);
           console.log(
             "[onNotificationCreated] WebPush notification sent to user " +

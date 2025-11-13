@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
+import { Location } from '@angular/common';
 import { interval, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { TaskService } from '../../services/task.service';
@@ -30,8 +31,10 @@ interface TimerState {
 export class TimerComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private location = inject(Location);
   private taskService = inject(TaskService);
   private destroy$ = new Subject<void>();
+  private pomodoroTimerStarted = false; // ポモドーロタイマーが既に開始されているか
 
   task: Task | null = null;
   mode: 'normal' | 'pomodoro' = 'normal';
@@ -65,6 +68,7 @@ export class TimerComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+    this.pomodoroTimerStarted = false;
   }
 
   async loadTask(taskId: string) {
@@ -108,6 +112,12 @@ export class TimerComponent implements OnInit, OnDestroy {
   }
 
   startPomodoroTimer() {
+    // 既にタイマーが開始されている場合は、新しい購読を開始しない
+    if (this.pomodoroTimerStarted) {
+      return;
+    }
+    
+    this.pomodoroTimerStarted = true;
     interval(1000).pipe(
       takeUntil(this.destroy$)
     ).subscribe(() => {
@@ -179,15 +189,15 @@ export class TimerComponent implements OnInit, OnDestroy {
   }
 
   onBreakComplete() {
-    alert('休憩時間（5分）が経過しました！再開しますか？');
-    this.timerState.isRunning = false;
+    alert('休憩時間（5分）が経過しました！再開してください。');
+    // isRunningはfalseにしない（breakElapsedの更新を継続させて、5分ごとの通知を出すため）
     this.timerState.isPaused = false;
     this.timerState.breakNotificationCount = 1;
   }
 
   showResumePrompt() {
     this.timerState.breakNotificationCount += 1;
-    alert(`休憩時間が${5 * this.timerState.breakNotificationCount}分経過しました。再開しますか？`);
+    alert(`休憩時間が${5 * this.timerState.breakNotificationCount}分経過しました。再開してください。`);
   }
 
   resumeFromBreak() {
@@ -202,11 +212,20 @@ export class TimerComponent implements OnInit, OnDestroy {
 
   pause() {
     this.timerState.isPaused = true;
+    // ノーマルモードの場合、現在の経過時間を保持してstartTimeを調整
+    if (this.mode === 'normal') {
+      const currentElapsed = this.timerState.elapsedTime;
+      this.timerState.startTime = Date.now() - currentElapsed;
+    }
   }
 
   resume() {
     this.timerState.isPaused = false;
-    // startPomodoroTimerは既に動いているので、isPausedをfalseにするだけでOK
+    // ノーマルモードの場合、startTimeを現在時刻から経過時間を引いた値に調整
+    if (this.mode === 'normal') {
+      this.timerState.startTime = Date.now() - this.timerState.elapsedTime;
+    }
+    // ポモドーロモードの場合、startPomodoroTimerは既に動いているので、isPausedをfalseにするだけでOK
   }
 
   stop() {
@@ -218,13 +237,19 @@ export class TimerComponent implements OnInit, OnDestroy {
     this.pomodoroElapsed = 0;
     this.timerState.breakElapsed = 0;
     this.timerState.breakNotificationCount = 0;
+    // タイマーを停止したら、既存の購読を解除してフラグをリセット
+    this.destroy$.next();
+    this.destroy$ = new Subject<void>(); // 新しいSubjectを作成（次回開始時に新しい購読を開始できるように）
+    this.pomodoroTimerStarted = false;
   }
 
   async finish() {
     if (!this.task) return;
 
     const seconds = this.calculateWorkSeconds();
-    const minutes = Math.ceil(seconds / 60); // 表示用：切り上げ
+    // 秒を分に変換（29秒以下は切り捨て、30秒以上は切り上げ）
+    const remainder = seconds % 60;
+    const minutes = Math.floor(seconds / 60) + (remainder >= 30 ? 1 : 0);
     
     if (confirm(`${minutes}分の作業を記録しますか？`)) {
       try {
@@ -285,11 +310,17 @@ export class TimerComponent implements OnInit, OnDestroy {
   }
 
   goBack() {
-    if (this.task) {
-      // fromクエリパラメータを引き継いでタスク詳細に戻る
-      const from = this.route.snapshot.queryParamMap.get('from');
-      const queryParams = from ? { from } : {};
-      this.router.navigate(['/task', this.task.id], { queryParams });
+    if (window.history.length > 1) {
+      this.location.back();
+    } else {
+      // 履歴がない場合はタスク詳細に戻る（タスクIDがある場合）
+      if (this.task) {
+        const from = this.route.snapshot.queryParamMap.get('from');
+        const queryParams = from ? { from } : {};
+        this.router.navigate(['/task', this.task.id], { queryParams });
+      } else {
+        this.router.navigate(['/home']);
+      }
     }
   }
 }

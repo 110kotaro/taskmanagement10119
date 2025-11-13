@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { Location } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { TeamService } from '../../services/team.service';
 
@@ -13,6 +14,7 @@ import { TeamService } from '../../services/team.service';
 })
 export class TeamCreateComponent implements OnInit {
   private router = inject(Router);
+  private location = inject(Location);
   private teamService = inject(TeamService);
   private fb = inject(FormBuilder);
 
@@ -53,7 +55,12 @@ export class TeamCreateComponent implements OnInit {
   }
 
   goBack() {
-    this.router.navigate(['/teams']);
+    if (window.history.length > 1) {
+      this.location.back();
+    } else {
+      // 履歴がない場合はチーム一覧に戻る
+      this.router.navigate(['/teams']);
+    }
   }
 }
 

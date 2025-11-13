@@ -1,9 +1,7 @@
 <div class="task-import-container">
   <header class="header">
+    <button class="back-btn" (click)="goBack()">← 戻る</button>
     <h1>タスクインポート</h1>
-    <div class="header-actions">
-      <button class="back-btn" (click)="goBack()">← 戻る</button>
-    </div>
   </header>
 
   <main class="main-content">
@@ -52,7 +50,15 @@
                   <li>時間形式：HH:MM（例：09:00、18:30）</li>
                   <li>ステータス：未着手、進行中、完了</li>
                   <li>優先度：重要、普通、低め、なし</li>
-                  <li>担当者名・プロジェクト名は既存のものを使用してください（存在しないプロジェクト名の場合は自動作成されます）</li>
+                  <li>担当者名は既存のものを使用してください</li>
+                  <li>チーム名が空欄、「-」、「ー」、「個人」の場合は個人タスクとして扱います</li>
+                  <li>チーム名が指定されている場合は、チームタスクとして作成されます（存在しない、または自分が所属しないチームの場合は確認ダイアログが表示されます）</li>
+                  <li>プロジェクト名について：
+                    <ul>
+                      <li>個人タスクの場合：存在しないプロジェクト名は自動作成されます</li>
+                      <li>チームタスクの場合：プロジェクトがチーム内に存在しない場合は確認ダイアログが表示されます（作成、修正、プロジェクトなし、スキップから選択）</li>
+                    </ul>
+                  </li>
                 </ul>
               </div>
               <div class="sample-modal-actions">
@@ -113,6 +119,7 @@
         <p class="description">インポートされるデータを確認してください（全{{ importRows.length }}行を表示、エラーがある行は先頭に表示）</p>
         
         <div class="preview-table-container">
+          
           <table class="preview-table">
             <thead>
               <tr>
@@ -224,6 +231,17 @@
                   <option value="">選択しない</option>
                   <option *ngFor="let project of projects" [value]="project.id">
                     {{ project.name }}
+                  </option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>チーム名</label>
+                <select formControlName="teamName">
+                  <option value="">個人タスク</option>
+                  <option *ngFor="let team of teams" [value]="team.name">
+                    {{ team.name }}
                   </option>
                 </select>
               </div>

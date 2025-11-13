@@ -13,7 +13,7 @@
           type="text" 
           placeholder="コメントを検索..."
           [(ngModel)]="searchKeyword"
-          (input)="onSearchChange()"
+          (ngModelChange)="onSearchChange()"
           class="search-input">
       </div>
 
@@ -70,37 +70,6 @@
         </div>
 
         <div class="filter-group">
-          <label>投稿者:</label>
-          <select [(ngModel)]="selectedUserId" (change)="onFilterChange()">
-            <option value="all">すべて</option>
-            <option *ngFor="let member of teamMembers" [value]="member.id">
-              {{ member.name }}
-            </option>
-          </select>
-        </div>
-
-        <div class="filter-group">
-          <label>投稿日:</label>
-          <select [(ngModel)]="selectedDateRange" (change)="onFilterChange()">
-            <option value="all">すべて</option>
-            <option value="today">今日</option>
-            <option value="week">今週</option>
-            <option value="month">今月</option>
-            <option value="custom">期間指定</option>
-          </select>
-        </div>
-
-        <div class="filter-group" *ngIf="selectedDateRange === 'custom'">
-          <label>開始日:</label>
-          <input type="date" [(ngModel)]="customStartDate" (change)="onFilterChange()">
-        </div>
-
-        <div class="filter-group" *ngIf="selectedDateRange === 'custom'">
-          <label>終了日:</label>
-          <input type="date" [(ngModel)]="customEndDate" (change)="onFilterChange()">
-        </div>
-
-        <div class="filter-group">
           <label>未読/既読:</label>
           <select [(ngModel)]="selectedReadStatus" (change)="onFilterChange()">
             <option value="all">すべて</option>
@@ -134,47 +103,71 @@
           <label>&#64;メンション:</label>
           <select [(ngModel)]="hasMention" (change)="onFilterChange()">
             <option value="all">すべて</option>
-            <option value="yes">あり</option>
-            <option value="no">なし</option>
+            <option value="mentioned">自分がメンションされたタスク</option>
+            <option value="no">自分がメンションされてないタスク</option>
           </select>
         </div>
       </div>
     </div>
 
-    <!-- コメント一覧 -->
-    <div class="comments-list-container">
+    <!-- タスク単位のコメント一覧 -->
+    <div class="tasks-with-comments-list-container">
       <div *ngIf="isLoading" class="loading">読み込み中...</div>
-      <div *ngIf="!isLoading && filteredComments.length === 0" class="no-comments">
-        コメントが見つかりません
+      <div *ngIf="!isLoading && filteredTasksWithComments.length === 0" class="no-comments">
+        コメントがあるタスクが見つかりません
       </div>
 
-      <div *ngIf="!isLoading" class="comments-list">
-        <div *ngFor="let comment of filteredComments" class="comment-item" (click)="viewTask(comment.taskId)">
-          <div class="comment-header">
-            <div class="comment-meta-left">
-              <span class="comment-author">{{ comment.userName }}</span>
-              <span class="comment-date">{{ formatDateTime(comment.createdAt) }}</span>
-            </div>
-            <div class="comment-meta-right">
-              <span class="task-link">📎 {{ comment.taskTitle }}</span>
-              <span *ngIf="comment.projectName" class="project-badge">📁 {{ comment.projectName }}</span>
+      <div *ngIf="!isLoading" class="tasks-with-comments-list">
+        <div *ngFor="let taskItem of filteredTasksWithComments" 
+             class="task-comment-item" 
+             (click)="viewItem(taskItem)"
+             role="button"
+             tabindex="0"
+             (keydown.enter)="viewItem(taskItem)"
+             (keydown.space)="viewItem(taskItem); $event.preventDefault()">
+          
+          <!-- タスク/プロジェクト情報ヘッダー -->
+          <div class="task-header">
+            <h3 class="task-title">
+              <span *ngIf="taskItem.isProject">📁 </span>{{ taskItem.itemTitle }}
+            </h3>
+            <div class="task-badges">
+              <span *ngIf="!taskItem.isProject" class="task-status-badge" [ngClass]="'status-' + taskItem.taskStatus">
+                {{ getStatusLabel(taskItem.taskStatus) }}
+              </span>
+              <span *ngIf="!taskItem.isProject" class="task-priority-badge" [ngClass]="'priority-' + taskItem.taskPriority">
+                {{ getPriorityLabel(taskItem.taskPriority) }}
+              </span>
+              <span *ngIf="!taskItem.isProject && taskItem.projectName" class="project-badge">📁 {{ taskItem.projectName }}</span>
             </div>
           </div>
-          <div class="comment-content">
-            {{ comment.content }}
+
+          <!-- 最新コメントの抜粋 -->
+          <div class="latest-comment-preview" *ngIf="taskItem.latestComment">
+            <div class="comment-preview-content" [innerHTML]="searchKeyword.trim() ? highlightKeyword(taskItem.latestCommentPreview, searchKeyword) : taskItem.latestCommentPreview"></div>
+            <div class="comment-preview-meta">
+              <span class="comment-author">{{ taskItem.latestComment.userName }}</span>
+              <span class="comment-date">{{ formatDateTime(taskItem.latestComment.createdAt) }}</span>
+            </div>
           </div>
-          <div class="comment-footer">
-            <span class="status-badge" [ngClass]="'status-' + comment.taskStatus">
-              {{ getStatusLabel(comment.taskStatus) }}
+
+          <!-- コメント統計情報 -->
+          <div class="comment-stats">
+            <span class="total-comments">コメント: {{ taskItem.totalCommentCount }}件</span>
+            <span *ngIf="taskItem.unreadCount > 0" class="unread-badge">
+              {{ taskItem.unreadCount }}件の未読
             </span>
-            <span class="priority-badge" [ngClass]="'priority-' + comment.taskPriority">
-              {{ getPriorityLabel(comment.taskPriority) }}
+            <span *ngIf="searchKeyword.trim() && taskItem.matchingCommentCount" class="matching-count">
+              「{{ searchKeyword }}」に該当: {{ taskItem.matchingCommentCount }}件
             </span>
-            <span *ngIf="comment.content.includes('@')" class="mention-badge">&#64;メンション</span>
+          </div>
+
+          <!-- @メンション表示 -->
+          <div class="mention-indicator" *ngIf="taskItem.hasMentionForCurrentUser">
+            <span class="mention-badge">&#64;自分がメンションされたコメントあり</span>
           </div>
         </div>
       </div>
     </div>
   </main>
 </div>
-

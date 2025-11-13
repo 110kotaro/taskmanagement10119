@@ -3,24 +3,24 @@
     <header class="header">
         <div class="header-left">
             <button class="back-btn" (click)="goBack()">← 戻る</button>
-            <h1>タスク一覧</h1>
+            <h1>📋 タスク一覧</h1>
         </div>
         <div class="header-right">
             <!-- 表示モード切り替えボタン -->
             <div class="view-mode-selector">
                 <button 
                     class="view-mode-btn" 
-                    [class.active]="viewMode === 'card'"
-                    (click)="switchViewMode('card')"
-                    title="カード表示">
-                    📋
-                </button>
-                <button 
-                    class="view-mode-btn" 
                     [class.active]="viewMode === 'table'"
                     (click)="switchViewMode('table')"
                     title="リスト表示">
                     📊
+                </button>
+                <button 
+                    class="view-mode-btn" 
+                    [class.active]="viewMode === 'card'"
+                    (click)="switchViewMode('card')"
+                    title="カード表示">
+                    📋
                 </button>
             </div>
             <button class="create-btn" (click)="openCreateTaskModal()">+ タスク作成</button>
@@ -31,49 +31,128 @@
     <main class="main-content">
         <!--フィルター・ソートセクション-->
         <div *ngIf="!isLoading" class="filter-sort-section">
-            <div *ngIf="viewMode === 'table'" class="filter-group">
-                <label>ステータス:</label>
-                <select [(ngModel)]="statusFilter" (change)="onStatusFilterChange(statusFilter)">
-                    <option value="all">すべて</option>
-                    <option value="not_started">未着手</option>
-                    <option value="in_progress">進行中</option>
-                    <option value="overdue">期限切れ</option>
-                </select>
+            <!-- ステータスフィルター -->
+            <div class="filter-group" *ngIf="viewMode === 'table'">
+                <label class="filter-label">ステータス:</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input 
+                            type="checkbox" 
+                            [checked]="statusFilters.has('not_started')"
+                            (change)="onStatusFilterChange('not_started', $any($event.target).checked)">
+                        <span>未着手</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input 
+                            type="checkbox" 
+                            [checked]="statusFilters.has('in_progress')"
+                            (change)="onStatusFilterChange('in_progress', $any($event.target).checked)">
+                        <span>進行中</span>
+                    </label>
+                </div>
             </div>
             
-            <div class="filter-group">
-                <label>優先度:</label>
-                <select [(ngModel)]="priorityFilter" (change)="onPriorityFilterChange(priorityFilter)">
-                    <option value="all">すべて</option>
-                    <option value="important">重要</option>
-                    <option value="normal">普通</option>
-                    <option value="low">低め</option>
-                    <option value="none">なし</option>
-                </select>
+            <!-- 期限切れフィルター（独立） -->
+            <div class="filter-group" *ngIf="viewMode === 'table'">
+                <label class="filter-label">期限切れ:</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input 
+                            type="checkbox" 
+                            [checked]="overdueFilter"
+                            (change)="onOverdueFilterChange($any($event.target).checked)">
+                        <span>期限切れを含める</span>
+                    </label>
+                </div>
             </div>
             
+            <!-- 重要度フィルター -->
+            <div class="filter-group priority-filter-group">
+                <label class="filter-label">重要度:</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input 
+                            type="checkbox" 
+                            [checked]="priorityFilters.has('important')"
+                            (change)="onPriorityFilterChange('important', $any($event.target).checked)">
+                        <span>重要</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input 
+                            type="checkbox" 
+                            [checked]="priorityFilters.has('normal')"
+                            (change)="onPriorityFilterChange('normal', $any($event.target).checked)">
+                        <span>普通</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input 
+                            type="checkbox" 
+                            [checked]="priorityFilters.has('low')"
+                            (change)="onPriorityFilterChange('low', $any($event.target).checked)">
+                        <span>低め</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input 
+                            type="checkbox" 
+                            [checked]="priorityFilters.has('none')"
+                            (change)="onPriorityFilterChange('none', $any($event.target).checked)">
+                        <span>なし</span>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- タスクタイプフィルター -->
             <div class="filter-group">
-                <label>タスクタイプ:</label>
-                <select [(ngModel)]="taskTypeFilter" (change)="onTaskTypeFilterChange(taskTypeFilter)">
-                    <option value="all">すべて</option>
-                    <option value="normal">通常</option>
-                    <option value="meeting">会議</option>
-                    <option value="regular">定期</option>
-                    <option value="project">プロジェクト</option>
-                    <option value="other">その他</option>
-                </select>
+                <label class="filter-label">タスクタイプ:</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input 
+                            type="checkbox" 
+                            [checked]="taskTypeFilters.has('normal')"
+                            (change)="onTaskTypeFilterChange('normal', $any($event.target).checked)">
+                        <span>通常</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input 
+                            type="checkbox" 
+                            [checked]="taskTypeFilters.has('meeting')"
+                            (change)="onTaskTypeFilterChange('meeting', $any($event.target).checked)">
+                        <span>会議</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input 
+                            type="checkbox" 
+                            [checked]="taskTypeFilters.has('regular')"
+                            (change)="onTaskTypeFilterChange('regular', $any($event.target).checked)">
+                        <span>定期</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input 
+                            type="checkbox" 
+                            [checked]="taskTypeFilters.has('project')"
+                            (change)="onTaskTypeFilterChange('project', $any($event.target).checked)">
+                        <span>プロジェクト</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input 
+                            type="checkbox" 
+                            [checked]="taskTypeFilters.has('other')"
+                            (change)="onTaskTypeFilterChange('other', $any($event.target).checked)">
+                        <span>その他</span>
+                    </label>
+                </div>
             </div>
             
             <div class="sort-group">
                 <label>ソート:</label>
                 <select [value]="sortBy" (change)="onSortChange($any($event.target).value)">
                     <option value="endDate">期限順</option>
-                    <option value="createdAt">登録日順</option>
+                    <option value="startDate">開始日順</option>
                     <option value="priority">重要度順</option>
                     <option value="title">タイトル順</option>
                 </select>
                 <button class="sort-order-btn" (click)="toggleSortOrder()">
-                    {{ sortOrder === 'asc' ? '↑' : '↓' }}
+                    {{ sortOrder === 'asc' ? '昇順 ↑ ' : '降順 ↓ ' }}
                 </button>
             </div>
         </div>
@@ -84,8 +163,8 @@
             読み込み中...
         </div>
 
-        <!--タスクがない場合-->
-        <div *ngIf="!isLoading && tasks.length === 0" class="no-tasks">
+        <!--タスクがない場合（タスクが全くない場合、または完了済みタスクのみの場合）-->
+        <div *ngIf="!isLoading && (tasks.length === 0 || !hasIncompleteTasks)" class="no-tasks">
             <div class="empty-state">
                 <h3>タスクがありません</h3>
                 <p>新しいタスクを作成してみましょう！</p>
@@ -93,8 +172,16 @@
             </div>
         </div>
 
+        <!--フィルターで全て除外された場合のメッセージ（カード表示）-->
+        <div *ngIf="viewMode === 'card' && !isLoading && hasIncompleteTasks && filteredTasks.length === 0" class="no-tasks">
+            <div class="empty-state">
+                <h3>条件に一致するタスクがありません</h3>
+                <p>フィルター条件を変更してみましょう。</p>
+            </div>
+        </div>
+
         <!--カード表示（デフォルト）-->
-        <div *ngIf="viewMode === 'card' && !isLoading && tasks.length > 0" class="task-groups-container">
+        <div *ngIf="viewMode === 'card' && !isLoading && hasIncompleteTasks && filteredTasks.length > 0" class="task-groups-container">
             <ng-container *ngFor="let groupKey of ['not_started', 'in_progress', 'overdue']">
             <div class="task-group">
                 
@@ -109,7 +196,8 @@
                     <div *ngFor="let task of taskGroups[groupKey]" 
                          class="task-card" 
                          [class.overdue-start-date]="isOverdueStartDate(task)"
-                         [title]="isOverdueStartDate(task) ? '開始日が過ぎています' : ''"
+                         [class.overdue-end-date]="isOverdueEndDate(task)"
+                         [title]="isOverdueStartDate(task) ? '開始日が過ぎています' : (isOverdueEndDate(task) ? '期限が過ぎています' : '')"
                          (click)="viewTaskDetail(task.id)">
 
                         <!--タスクタイトル-->
@@ -145,6 +233,14 @@
             </ng-container>
         </div>
 
+        <!--フィルターで全て除外された場合のメッセージ（テーブル表示）-->
+        <div *ngIf="viewMode === 'table' && !isLoading && hasIncompleteTasks && filteredTasks.length === 0" class="no-tasks">
+            <div class="empty-state">
+                <h3>条件に一致するタスクがありません</h3>
+                <p>フィルター条件を変更してみましょう。</p>
+            </div>
+        </div>
+
         <!--テーブル表示（オプション）-->
         <div *ngIf="viewMode === 'table' && !isLoading && filteredTasks.length > 0" class="table-container">
             <div class="table-actions" *ngIf="filteredTasks.length > 0">
@@ -174,7 +270,8 @@
                     <tr 
                         *ngFor="let task of filteredTasks" 
                         class="task-row"
-                        [class.overdue-start-date]="isOverdueStartDate(task)">
+                        [class.overdue-start-date]="isOverdueStartDate(task)"
+                        [class.overdue-end-date]="isOverdueEndDate(task)">
                         <td class="check-column">
                             <input 
                                 type="checkbox" 
@@ -202,10 +299,6 @@
                     </tr>
                 </tbody>
             </table>
-            
-            <div *ngIf="filteredTasks.length === 0" class="no-tasks-table">
-                <p>タスクがありません</p>
-            </div>
         </div>
     </main>
 </div>

@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { Location } from '@angular/common';
 import { Timestamp } from 'firebase/firestore';
 import { ProjectService } from '../../services/project.service';
 import { AuthService } from '../../services/auth.service';
@@ -20,6 +21,7 @@ export class ProjectListComponent implements OnInit {
   private authService = inject(AuthService);
   private teamService = inject(TeamService);
   private router = inject(Router);
+  private location = inject(Location);
 
   projects: Project[] = [];
   isLoading = true;
@@ -92,6 +94,9 @@ export class ProjectListComponent implements OnInit {
         this.userTeamIds
       );
       
+      // 完了したプロジェクトを除外
+      this.projects = this.projects.filter(project => project.status !== ProjectStatus.Completed);
+      
       // 各プロジェクトの完了率を再計算
       const recalculationPromises = this.projects.map(async (project) => {
         try {
@@ -110,6 +115,9 @@ export class ProjectListComponent implements OnInit {
         this.viewMode === 'team' ? this.selectedTeamId : null,
         this.userTeamIds
       );
+      
+      // 完了したプロジェクトを除外（再取得後も）
+      this.projects = this.projects.filter(project => project.status !== ProjectStatus.Completed);
       
       this.isLoading = false;
     } catch (error) {
@@ -147,7 +155,11 @@ export class ProjectListComponent implements OnInit {
   }
 
   goBack() {
-    this.router.navigate(['/home']);
+    if (window.history.length > 1) {
+      this.location.back();
+    } else {
+      this.router.navigate(['/home']);
+    }
   }
 }
 

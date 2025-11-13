@@ -1,17 +1,23 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, ViewChild, ElementRef } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Timestamp, deleteField } from 'firebase/firestore';
+import { Location } from '@angular/common';
+import { Timestamp, deleteField, doc, setDoc, getDoc } from 'firebase/firestore';
+import { db } from '../../../firebase-config';
 import { TaskService } from '../../services/task.service';
 import { ProjectService } from '../../services/project.service';
 import { TeamService } from '../../services/team.service';
 import { AuthService } from '../../services/auth.service';
+import { NotificationService } from '../../services/notification.service';
 // @ts-ignore - StorageServiceが認識されない場合は一時的に無視
 import { StorageService } from '../../services/storage.service';
 import { Project } from '../../models/project.model';
-import { Task, TaskStatus, PriorityLabel, TaskType, SubTask, Comment, WorkSession, WorkSessionChangeLog } from '../../models/task.model';
+import { Task, TaskStatus, PriorityLabel, TaskType, SubTask, Comment, WorkSession, WorkSessionChangeLog, RecurrenceType } from '../../models/task.model';
 import { User } from '../../models/user.model';
+import { TeamMember } from '../../models/team.model';
+import { NotificationType } from '../../models/notification.model';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { NextTaskCandidatesComponent } from '../next-task-candidates/next-task-candidates.component';
 
@@ -22,13 +28,15 @@ import { NextTaskCandidatesComponent } from '../next-task-candidates/next-task-c
   templateUrl: './task-detail.component.html',
   styleUrl: './task-detail.component.css'
 })
-export class TaskDetailComponent implements OnInit {
+export class TaskDetailComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private location = inject(Location);
   private taskService = inject(TaskService);
   private projectService = inject(ProjectService);
   private teamService = inject(TeamService);
   private authService = inject(AuthService);
+  private notificationService = inject(NotificationService);
   private storageService = inject(StorageService);
   private fb = inject(FormBuilder);
 
@@ -36,6 +44,7 @@ export class TaskDetailComponent implements OnInit {
   editForm: FormGroup;
   isEditing = false;
   isLoading = true;
+  private routeParamsSubscription?: Subscription;
   projectName: string | null = null;
   teamName: string | null = null;
   projects: Project[] = [];
@@ -43,6 +52,8 @@ export class TaskDetailComponent implements OnInit {
   newSubtaskTitle = '';
   newCommentContent = '';
   showCommentsTab = false;
+  unreadCommentCount = 0; // 未読コメント数
+  readCommentIds: Set<string> = new Set(); // 既読コメントIDのセット
   selectedFiles: File[] = [];
   isUploadingFiles = false;
   manualProgressValue: number = 0; // 手動入力中の進捗率値
@@ -58,6 +69,14 @@ export class TaskDetailComponent implements OnInit {
   isFromArchive = false; // アーカイブから遷移したかどうか
   showNextTaskCandidates = false; // 次やるタスクモーダルの表示/非表示
   showNextTaskConfirmation = false; // 次やるタスク確認ダイアログの表示/非表示
+  teamMembers: TeamMember[] = []; // チームメンバーリスト
+  projectMembers: any[] = []; // プロジェクトメンバーリスト（プロジェクトタスク時）
+  mentionableUsers: Array<{ id: string; name: string; email: string }> = []; // メンション可能なユーザーリスト
+  showMentionSuggestions = false; // メンション候補の表示/非表示
+  mentionSuggestions: Array<{ id: string; name: string; email: string }> = []; // メンション候補リスト
+  mentionSearchText = ''; // メンション検索テキスト
+  mentionCursorPosition = 0; // カーソル位置（@オートコンプリート用）
+  @ViewChild('commentTextarea', { static: false }) commentTextarea?: ElementRef<HTMLTextAreaElement>;
 
   constructor() {
     this.editForm = this.fb.group({
@@ -66,6 +85,7 @@ export class TaskDetailComponent implements OnInit {
       memo: [''],
       status: [''],
       priority: [''],
+      taskType: ['normal'],
       startDate: [''],
       startTime: [''], // 開始時間（任意）
       endDate: ['', Validators.required],
@@ -78,7 +98,9 @@ export class TaskDetailComponent implements OnInit {
       enableEndReminder: [false],
       endReminderType: ['none'],
       enableCustomReminder: [false],
-      customReminderDateTime: ['']
+      customReminderDateTime: [''],
+      recurrence: [RecurrenceType.None],
+      recurrenceEndDate: ['']
     });
 
     // セッション編集フォームを追加
@@ -102,6 +124,20 @@ export class TaskDetailComponent implements OnInit {
     const taskId = this.route.snapshot.paramMap.get('id');
     if (taskId) {
       await this.loadTask(taskId);
+    }
+    
+    // ルートパラメータの変更を監視
+    this.routeParamsSubscription = this.route.paramMap.subscribe(async (params) => {
+      const newTaskId = params.get('id');
+      if (newTaskId && newTaskId !== this.task?.id) {
+        await this.loadTask(newTaskId);
+      }
+    });
+  }
+
+  ngOnDestroy() {
+    if (this.routeParamsSubscription) {
+      this.routeParamsSubscription.unsubscribe();
     }
   }
 
@@ -132,6 +168,18 @@ export class TaskDetailComponent implements OnInit {
         // クエリパラメーターから遷移元を確認
         const from = this.route.snapshot.queryParamMap.get('from');
         this.isFromArchive = from === 'archive';
+        
+        // コメント一覧から遷移した場合はコメントタブを開いて既読にする
+        if (from === 'comments') {
+          this.showCommentsTab = true;
+          // コメントがある場合は既読にする
+          if (this.task.comments && this.task.comments.length > 0) {
+            this.markCommentsAsRead(taskId);
+          }
+        }
+        
+        // 未読コメント数を計算
+        await this.loadUnreadCommentCount();
 
         // タスクが削除されているか確認
         const isDeleted = this.task.isDeleted === true;
@@ -212,6 +260,73 @@ export class TaskDetailComponent implements OnInit {
           // チーム名が既に保存されている場合はそれを使用
           this.teamName = this.task.teamName;
         }
+
+        // チームタスクの場合、チームメンバーを取得
+        if (this.task.teamId) {
+          try{
+            const team = await this.teamService.getTeam(this.task.teamId);
+            if (team) {
+              this.teamMembers=team.members;
+            }
+          } catch (error) {
+            console.error('Error loading team members:', error);
+            this.teamMembers = [];
+          }
+        }else{
+          // 個人タスクの場合、チームメンバーを空配列に初期化
+          this.teamMembers = [];
+        }
+
+        // プロジェクトタスクの場合、プロジェクトメンバーを取得
+        if (this.task.projectId) {
+          try {
+            const project = await this.projectService.getProject(this.task.projectId);
+            if (project && project.members) {
+              this.projectMembers = project.members;
+            } else {
+              this.projectMembers = [];
+            }
+          } catch (error) {
+            console.error('Error loading project members:', error);
+            this.projectMembers = [];
+          }
+        } else {
+          this.projectMembers = [];
+        }
+
+        // メンション可能なユーザーリストを取得
+        await this.loadMentionableUsers();
+        
+        // プロジェクトIDの変更を監視してプロジェクトメンバーを読み込む
+        this.editForm.get('projectId')?.valueChanges.subscribe(async (projectId) => {
+          if (projectId) {
+            await this.loadProjectMembers(projectId);
+            // プロジェクトが変更された場合、担当者がプロジェクトメンバーに含まれていない場合はリセット
+            if (this.editForm.get('assigneeId')?.value) {
+              const currentAssigneeId = this.editForm.get('assigneeId')?.value;
+              const isAssigneeInProject = this.projectMembers.some(m => m.userId === currentAssigneeId);
+              if (!isAssigneeInProject) {
+                this.editForm.patchValue({ assigneeId: '' });
+              }
+            }
+            // プロジェクトが設定された場合、タスクタイプを自動で「project」に設定
+            const currentTaskType = this.editForm.get('taskType')?.value;
+            if (currentTaskType !== 'project') {
+              this.editForm.patchValue({ taskType: 'project' });
+            }
+          } else {
+            this.projectMembers = [];
+            // プロジェクトが解除された場合、チームタスクの場合はチームメンバーに戻す
+            if (this.task && this.task.teamId) {
+              // チームメンバーは既に読み込まれている
+            }
+            // プロジェクトが解除された場合、タスクタイプが「project」の場合は「normal」に戻す
+            const currentTaskType = this.editForm.get('taskType')?.value;
+            if (currentTaskType === 'project') {
+              this.editForm.patchValue({ taskType: 'normal' });
+            }
+          }
+        });
         
             // 開始日時の処理
             const startDate = this.task.startDate.toDate();
@@ -229,13 +344,18 @@ export class TaskDetailComponent implements OnInit {
               memo: this.task.memo || '',
               status: this.task.status,
               priority: this.task.priority,
+              taskType: this.task.projectId ? 'project' : (this.task.taskType || 'normal'), // プロジェクトがある場合は自動設定
               startDate: startDateOnly,
               startTime: startTimeOnly,
               endDate: endDateOnly,
               endTime: endTimeOnly,
               assigneeId: this.task.assigneeId || '',
               projectId: this.task.projectId || '',
-              showProgress: this.task.showProgress !== undefined ? this.task.showProgress : true
+              showProgress: this.task.showProgress !== undefined ? this.task.showProgress : true,
+              recurrence: this.task.recurrence || RecurrenceType.None,
+              recurrenceEndDate: this.task.recurrenceEndDate 
+                ? this.formatDateForInput(this.task.recurrenceEndDate)
+                : ''
             });
 
         // 既存のリマインダーを復元
@@ -350,12 +470,48 @@ export class TaskDetailComponent implements OnInit {
     });
   }
 
+  formatDateWithTime(timestamp: any): string {
+    if (!timestamp) return '';
+    const date = timestamp.toDate();
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const seconds = date.getSeconds();
+    
+    // 開始日: 00:00:00の場合は時間なし、それ以外は時間あり
+    // 終了日: 23:59:59の場合は時間なし、それ以外は時間あり
+    const isDefaultStartTime = hours === 0 && minutes === 0 && seconds === 0;
+    const isDefaultEndTime = hours === 23 && minutes === 59 && seconds === 59;
+    
+    if (isDefaultStartTime || isDefaultEndTime) {
+      // デフォルト時間の場合は日付のみ
+      return date.toLocaleDateString('ja-JP', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    } else {
+      // 時間が設定されている場合は日時を表示
+      return date.toLocaleString('ja-JP', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+  }
+
   toggleEdit() {
     this.isEditing = !this.isEditing;
   }
 
   async onSave() {
-    if (!this.task || !this.editForm.valid) {
+    if (!this.task) {
+      return;
+    }
+    
+    if (!this.editForm.valid) {
+      alert('必須項目を入力してください');
       return;
     }
 
@@ -373,6 +529,8 @@ export class TaskDetailComponent implements OnInit {
       }
       
       // リマインダー設定（開始前、終了前、カスタム）
+      // 既存のリマインダーを全て削除してから新しいリマインダーを追加する
+      // 既存のリマインダーは検索せず、常に新しいIDを生成する（重複を防ぐため）
       const reminders: any[] = [];
       let reminderCounter = 0;
 
@@ -391,21 +549,14 @@ export class TaskDetailComponent implements OnInit {
         
         const preset = presetMap[formValue.startReminderType];
         if (preset) {
-          const existingStartReminder = this.task?.reminders?.find((r: any) => r.type === 'before_start');
-          
-          // リマインダーの設定が変更されたかチェック
-          const isChanged = !existingStartReminder || 
-            existingStartReminder.amount !== preset.amount || 
-            existingStartReminder.unit !== preset.unit;
-          
+          // 既存のリマインダーを検索せず、常に新しいIDを生成する（重複を防ぐため）
           const reminder: any = {
-            id: existingStartReminder?.id || (Date.now() + reminderCounter).toString(),
+            id: (Date.now() + reminderCounter).toString(),
             type: 'before_start',
             amount: preset.amount,
             unit: preset.unit,
-            // 設定が変更された場合は sent を false にリセット
-            sent: (existingStartReminder?.sent && !isChanged) || false,
-            sentAt: (existingStartReminder?.sent && !isChanged) ? existingStartReminder?.sentAt : undefined
+            sent: false,
+            sentAt: undefined
           };
           reminders.push(reminder);
           reminderCounter++;
@@ -427,21 +578,14 @@ export class TaskDetailComponent implements OnInit {
         
         const preset = presetMap[formValue.endReminderType];
         if (preset) {
-          const existingEndReminder = this.task?.reminders?.find((r: any) => r.type === 'before_end');
-          
-          // リマインダーの設定が変更されたかチェック
-          const isChanged = !existingEndReminder || 
-            existingEndReminder.amount !== preset.amount || 
-            existingEndReminder.unit !== preset.unit;
-          
+          // 既存のリマインダーを検索せず、常に新しいIDを生成する（重複を防ぐため）
           const reminder: any = {
-            id: existingEndReminder?.id || (Date.now() + reminderCounter).toString(),
+            id: (Date.now() + reminderCounter).toString(),
             type: 'before_end',
             amount: preset.amount,
             unit: preset.unit,
-            // 設定が変更された場合は sent を false にリセット
-            sent: (existingEndReminder?.sent && !isChanged) || false,
-            sentAt: (existingEndReminder?.sent && !isChanged) ? existingEndReminder?.sentAt : undefined
+            sent: false,
+            sentAt: undefined
           };
           reminders.push(reminder);
           reminderCounter++;
@@ -451,7 +595,6 @@ export class TaskDetailComponent implements OnInit {
       // カスタム設定のリマインダー（絶対日時）
       if (formValue.enableCustomReminder && formValue.customReminderDateTime) {
         try {
-          const existingCustomReminder = this.task?.reminders?.find((r: any) => r.scheduledAt);
           const reminderDateTime = formValue.customReminderDateTime.trim();
           
           if (!reminderDateTime) {
@@ -465,45 +608,14 @@ export class TaskDetailComponent implements OnInit {
             throw new Error('無効なリマインダー日時です');
           }
         
-        // リマインダーの設定が変更されたかチェック（scheduledAt の時刻を比較）
-        let isChanged = true;
-        if (existingCustomReminder && existingCustomReminder.scheduledAt) {
-          try {
-            let existingDate: Date;
-            const existingScheduledAt = existingCustomReminder.scheduledAt;
-            
-            // Timestamp型のチェック（toDateメソッドがあるかどうか）
-            if (existingScheduledAt && typeof existingScheduledAt === 'object' && 'toDate' in existingScheduledAt && typeof (existingScheduledAt as any).toDate === 'function') {
-              // Timestamp型の場合
-              existingDate = (existingScheduledAt as any).toDate();
-            } else if (existingScheduledAt instanceof Date) {
-              // Date型の場合
-              existingDate = existingScheduledAt;
-            } else {
-              // その他の場合（文字列や数値など）
-              existingDate = new Date(existingScheduledAt as any);
-            }
-            
-            const newDate = newScheduledAt.toDate();
-            // 同じ日時（1分以内の誤差を許容）の場合は変更なしとみなす
-            if (existingDate && !isNaN(existingDate.getTime()) && newDate && !isNaN(newDate.getTime())) {
-              isChanged = Math.abs(existingDate.getTime() - newDate.getTime()) > 60000;
-            }
-          } catch (error) {
-            console.error('Error comparing reminder dates:', error);
-            // エラーが発生した場合は変更ありとみなす
-            isChanged = true;
-          }
-        }
-        
-        const reminder: any = {
-          id: existingCustomReminder?.id || (Date.now() + reminderCounter).toString(),
-          scheduledAt: newScheduledAt,
-          // 設定が変更された場合は sent を false にリセット
-          sent: (existingCustomReminder?.sent && !isChanged) || false,
-          sentAt: (existingCustomReminder?.sent && !isChanged) ? existingCustomReminder?.sentAt : undefined
-        };
-        reminders.push(reminder);
+          // 既存のリマインダーを検索せず、常に新しいIDを生成する（重複を防ぐため）
+          const reminder: any = {
+            id: (Date.now() + reminderCounter).toString(),
+            scheduledAt: newScheduledAt,
+            sent: false,
+            sentAt: undefined
+          };
+          reminders.push(reminder);
         } catch (error: any) {
           console.error('Error processing custom reminder:', error);
           alert('カスタムリマインダーの設定に失敗しました: ' + error.message);
@@ -565,13 +677,32 @@ export class TaskDetailComponent implements OnInit {
                endDateTime.setHours(23, 59, 59, 999);
              }
 
+             // 終了日時が開始日時より前でないかチェック
+             if (endDateTime.getTime() < startDateTime.getTime()) {
+               alert('終了日時は開始日時より後である必要があります');
+               return;
+             }
+
              // 担当者の処理
              let assigneeId: string | undefined = undefined;
              let assigneeName: string | undefined = undefined;
              if (formValue.assigneeId && formValue.assigneeId.trim() !== '') {
                assigneeId = formValue.assigneeId;
-               const selectedUser = this.users.find(u => u.id === assigneeId);
-               assigneeName = selectedUser?.displayName || selectedUser?.email || 'Unknown';
+               // プロジェクトタスクの場合：プロジェクトメンバーから検索
+               if (formValue.projectId && this.projectMembers.length > 0) {
+                 const selectedMember = this.projectMembers.find(m => m.userId === assigneeId);
+                 assigneeName = selectedMember?.userName || selectedMember?.userEmail || 'Unknown';
+               }
+               // チームタスク（プロジェクト未所属）の場合：チームメンバーから検索
+               else if (this.task.teamId && !formValue.projectId && this.teamMembers.length > 0) {
+                 const selectedMember = this.teamMembers.find(m => m.userId === assigneeId);
+                 assigneeName = selectedMember?.userName || selectedMember?.userEmail || 'Unknown';
+               }
+               // フォールバック：usersから検索
+               else {
+                 const selectedUser = this.users.find(u => u.id === assigneeId);
+                 assigneeName = selectedUser?.displayName || selectedUser?.email || 'Unknown';
+               }
              } else {
                // 担当者が未選択の場合は担当者なし（undefined）
                assigneeId = undefined;
@@ -584,11 +715,13 @@ export class TaskDetailComponent implements OnInit {
                memo: formValue.memo,
                status: formValue.status,
                priority: formValue.priority,
+               taskType: formValue.taskType as TaskType,
                startDate: Timestamp.fromDate(startDateTime),
                endDate: Timestamp.fromDate(endDateTime),
                assigneeId: assigneeId,
                assigneeName: assigneeName,
                showProgress: formValue.showProgress !== undefined ? formValue.showProgress : true,
+               // 既存のリマインダーを全て削除してから新しいリマインダーを追加（完全置き換え）
                reminders: serializedReminders
              };
       
@@ -624,8 +757,102 @@ export class TaskDetailComponent implements OnInit {
       // 完了に変更されたかどうかを記録
       const wasCompleted = formValue.status === 'completed' && this.task.status !== 'completed';
       
+      // 完了に変更される場合、確認ダイアログを表示（更新処理の前）
+      if (wasCompleted) {
+        if (!confirm('このタスクを完了にしますか？')) {
+          // キャンセルされた場合は処理を中断
+          return;
+        }
+      }
+      
+      // 繰り返し設定の変更を検出
+      const oldRecurrence = this.task?.recurrence || RecurrenceType.None;
+      const oldRecurrenceEndDate = this.task?.recurrenceEndDate;
+      
+      // 子タスクの場合、繰り返し設定は変更できないため、フォームの値を元の値で上書き
+      // また、繰り返し設定の変更チェックをスキップするため、oldRecurrenceとnewRecurrenceを同じ値に設定
+      let newRecurrence: RecurrenceType;
+      let newRecurrenceEndDate: Timestamp | undefined;
+      
+      if (this.isChildTask) {
+        // 子タスクの場合は、繰り返し設定を元の値で固定
+        formValue.recurrence = oldRecurrence;
+        formValue.recurrenceEndDate = oldRecurrenceEndDate 
+          ? this.formatDateForInput(oldRecurrenceEndDate)
+          : '';
+        // 変更チェックをスキップするため、newRecurrenceとnewRecurrenceEndDateをoldRecurrenceと同じ値に設定
+        newRecurrence = oldRecurrence;
+        newRecurrenceEndDate = oldRecurrenceEndDate;
+      } else {
+        // 親タスクの場合は、フォームの値を使用
+        newRecurrence = (formValue.recurrence as RecurrenceType) || RecurrenceType.None;
+        newRecurrenceEndDate = formValue.recurrenceEndDate
+          ? Timestamp.fromDate(new Date(formValue.recurrenceEndDate + 'T23:59:59'))
+          : undefined;
+      }
+
+      // 子タスクで繰り返し設定を変更しようとした場合、親タスクで操作するよう警告
+      // （子タスクの場合は既に上書きされているので、このチェックは通常通りに進む）
+      if (this.isChildTask && 
+          (oldRecurrence !== newRecurrence || 
+           (oldRecurrenceEndDate?.toMillis() !== newRecurrenceEndDate?.toMillis()))) {
+        const message = '繰り返し設定は親タスクで操作してください。\n\n親タスクの詳細ページに移動しますか？';
+        if (confirm(message)) {
+          // 親タスク詳細ページに遷移（編集モードで開く）
+          if (this.task.parentTaskId) {
+            this.router.navigate(['/task', this.task.parentTaskId], {
+              queryParams: { edit: 'true' }
+            });
+          }
+          return; // 処理を中断
+        } else {
+          // キャンセルされた場合は処理を中断
+          return;
+        }
+      }
+
+      // 削除されるタスクの件数を計算
+      let deleteCount = 0;
+      if (oldRecurrence !== newRecurrence || 
+          (oldRecurrenceEndDate?.toMillis() !== newRecurrenceEndDate?.toMillis())) {
+        deleteCount = await this.taskService.calculateTasksToDeleteOnRecurrenceChange(
+          this.task.id,
+          newRecurrence,
+          newRecurrenceEndDate,
+          oldRecurrence,
+          oldRecurrenceEndDate
+        );
+      }
+
+      // 削除されるタスクがある場合、警告と確認ダイアログを表示
+      if (deleteCount > 0) {
+        const message = `変更により${deleteCount}件のタスクが削除されます。\n\n本当に変更しますか？`;
+        if (!confirm(message)) {
+          return; // キャンセルされた場合は処理を中断
+        }
+      }
+
+      // 繰り返し設定の変更がある場合は特別な処理を使用
+      const hasRecurrenceChange = oldRecurrence !== newRecurrence || 
+        (oldRecurrenceEndDate?.toMillis() !== newRecurrenceEndDate?.toMillis());
+      
       try {
-        await this.taskService.updateTask(this.task.id, updates);
+        if (hasRecurrenceChange) {
+          // 繰り返し設定の変更を処理
+          updates.recurrence = newRecurrence;
+          updates.recurrenceEndDate = newRecurrenceEndDate;
+          await this.taskService.updateTaskWithRecurrenceChange(
+            this.task.id,
+            updates,
+            oldRecurrence,
+            oldRecurrenceEndDate,
+            newRecurrence,
+            newRecurrenceEndDate
+          );
+        } else {
+          // 通常の更新処理
+          await this.taskService.updateTask(this.task.id, updates);
+        }
         alert('タスクを更新しました');
         
         // 完了に変更された場合、次やるタスクを確認するかダイアログを表示
@@ -660,7 +887,23 @@ export class TaskDetailComponent implements OnInit {
   async onDelete() {
     if (!this.task) return;
     
-    if (!confirm('このタスクを削除しますか？')) {
+    // 繰り返しタスクの親タスクの場合、警告メッセージを追加
+    let confirmMessage = 'このタスクを削除しますか？';
+    if (this.task.isRecurrenceParent && this.task.recurrence && this.task.recurrence !== RecurrenceType.None) {
+      try {
+        const futureTasksCount = await this.taskService.getFutureRecurrenceTasksCount(this.task.id);
+        if (futureTasksCount > 0) {
+          confirmMessage = `このタスクは繰り返し設定されています。\nこのタスクと今日以降の全ての繰り返しタスク（${futureTasksCount}件）が削除されます。\n\n本当に削除しますか？`;
+        } else {
+          confirmMessage = `このタスクは繰り返し設定されています。\nこのタスクと全ての繰り返しタスクが削除されます。\n\n本当に削除しますか？`;
+        }
+      } catch (error: any) {
+        console.error('Error getting future recurrence tasks count:', error);
+        confirmMessage = `このタスクは繰り返し設定されています。\nこのタスクと全ての繰り返しタスクが削除されます。\n\n本当に削除しますか？`;
+      }
+    }
+    
+    if (!confirm(confirmMessage)) {
       return;
     }
 
@@ -690,7 +933,6 @@ export class TaskDetailComponent implements OnInit {
     queryParams.priority = this.task.priority || 'normal';
     if (this.task.customPriority) queryParams.customPriority = this.task.customPriority;
     queryParams.taskType = this.task.taskType || 'normal';
-    if (this.task.customTaskType) queryParams.customTaskType = this.task.customTaskType;
     
     // 日付をフォーマット（YYYY-MM-DD形式）
     const startDate = this.task.startDate.toDate();
@@ -715,6 +957,16 @@ export class TaskDetailComponent implements OnInit {
     }
     
     if (this.task.projectId) queryParams.projectId = this.task.projectId;
+    
+    // チーム情報を追加（チームタスクの場合）
+    if (this.task.teamId) {
+      queryParams.teamId = this.task.teamId;
+      queryParams.viewMode = 'team';
+      if (this.task.teamName) {
+        queryParams.teamName = this.task.teamName;
+      }
+    }
+    
     if (this.task.recurrence && this.task.recurrence !== 'none') {
       queryParams.recurrence = this.task.recurrence;
       if (this.task.recurrenceEndDate) {
@@ -739,15 +991,19 @@ export class TaskDetailComponent implements OnInit {
   }
 
   formatWorkTime(seconds: number): string {
-    if (!seconds || seconds === 0) return '0分';
-    // 秒を分に変換して切り上げ
-    const minutes = Math.ceil(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
+    if (!seconds || seconds === 0) return '0分0秒';
+    // 作業時間詳細では秒数まで表示
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
     if (hours > 0) {
-      return `${hours}時間 ${mins}分`;
+      return `${hours}時間${mins}分${secs}秒`;
     }
-    return `${mins}分`;
+    if (mins > 0) {
+      return `${mins}分${secs}秒`;
+    }
+    return `${secs}秒`;
   }
 
   startTimer() {
@@ -778,15 +1034,20 @@ export class TaskDetailComponent implements OnInit {
     return priorityMap[priority] || priority;
   }
 
+  getTaskTypeLabel(taskType: string): string {
+    const taskTypeMap: { [key: string]: string } = {
+      'normal': '通常',
+      'meeting': '会議',
+      'regular': '定期',
+      'project': 'プロジェクト',
+      'other': 'その他'
+    };
+    return taskTypeMap[taskType] || taskType || '通常';
+  }
+
   goBack() {
-    // どこから来たかを確認して戻る
-    const from = this.route.snapshot.queryParamMap.get('from');
-    if (from === 'gantt') {
-      this.router.navigate(['/gantt']);
-    } else if(from === 'task-list') {
-      this.router.navigate(['/task-list']);
-    } else if(from === 'statistics') {
-      this.router.navigate(['/statistics']);
+    if (window.history.length > 1) {
+      this.location.back();
     } else {
       this.router.navigate(['/home']);
     }
@@ -1002,6 +1263,174 @@ export class TaskDetailComponent implements OnInit {
   }
 
   // コメント関連メソッド
+  // メンション可能なユーザーリストを取得
+  async loadMentionableUsers() {
+    if (!this.task) {
+      this.mentionableUsers = [];
+      return;
+    }
+
+    try {
+      // プロジェクトタスクの場合：プロジェクトメンバーのみ
+      if (this.task.projectId) {
+        const project = await this.projectService.getProject(this.task.projectId);
+        if (project && project.members) {
+          this.mentionableUsers = project.members.map(member => ({
+            id: member.userId,
+            name: member.userName,
+            email: member.userEmail
+          }));
+        } else {
+          this.mentionableUsers = [];
+        }
+      }
+      // チームタスク（プロジェクト未所属）の場合：チームメンバーのみ
+      else if (this.task.teamId) {
+        const team = await this.teamService.getTeam(this.task.teamId);
+        if (team && team.members) {
+          this.mentionableUsers = team.members.map(member => ({
+            id: member.userId,
+            name: member.userName || member.userEmail,
+            email: member.userEmail
+          }));
+        } else {
+          this.mentionableUsers = [];
+        }
+      }
+      // 個人タスクの場合：空配列（メンション機能なし）
+      else {
+        this.mentionableUsers = [];
+      }
+    } catch (error) {
+      console.error('Error loading mentionable users:', error);
+      this.mentionableUsers = [];
+    }
+  }
+
+  // プロジェクトメンバーを読み込む
+  async loadProjectMembers(projectId: string) {
+    try {
+      const project = await this.projectService.getProject(projectId);
+      if (project && project.members) {
+        this.projectMembers = project.members;
+      } else {
+        this.projectMembers = [];
+      }
+    } catch (error) {
+      console.error('Error loading project members:', error);
+      this.projectMembers = [];
+    }
+  }
+
+  // コメントからメンションをパースしてユーザーIDのリストを取得
+  parseMentions(content: string): string[] {
+    // @の後に続く文字列を取得（スペース、改行、@まで）- 全角・半角両方に対応
+    const mentionRegex = /[@＠]([^\s@＠\n]+)/g;
+    const matches = content.matchAll(mentionRegex);
+    const mentionedUserIds: string[] = [];
+    const userMap = new Map<string, string>();
+    
+    // メンション可能なユーザーをマップに追加（名前とメールで検索できるように）
+    this.mentionableUsers.forEach(user => {
+      // ユーザー名を正規化（小文字、スペース除去）
+      const normalizedName = user.name.toLowerCase().replace(/\s+/g, '');
+      userMap.set(normalizedName, user.id);
+      userMap.set(user.name.toLowerCase(), user.id);
+      userMap.set(user.email.toLowerCase(), user.id);
+      // メールの@より前の部分も検索対象に
+      const emailPrefix = user.email.split('@')[0].toLowerCase();
+      userMap.set(emailPrefix, user.id);
+    });
+
+    for (const match of matches) {
+      const mentionText = match[1].toLowerCase().replace(/\s+/g, '');
+      const userId = userMap.get(mentionText);
+      if (userId && !mentionedUserIds.includes(userId)) {
+        mentionedUserIds.push(userId);
+      }
+    }
+
+    return mentionedUserIds;
+  }
+
+  // @メンションオートコンプリート関連メソッド
+  onCommentInput(event: Event) {
+    const textarea = event.target as HTMLTextAreaElement;
+    const content = textarea.value;
+    const cursorPosition = textarea.selectionStart;
+    this.mentionCursorPosition = cursorPosition;
+
+    // @の直後のテキストを取得（全角・半角両方に対応）
+    const textBeforeCursor = content.substring(0, cursorPosition);
+    const lastHalfAt = textBeforeCursor.lastIndexOf('@'); // 半角
+    const lastFullAt = textBeforeCursor.lastIndexOf('＠'); // 全角
+    const lastAtIndex = Math.max(lastHalfAt, lastFullAt);
+    
+    if (lastAtIndex !== -1) {
+      // @の後にスペースや改行がない場合のみ候補を表示
+      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+      if (!textAfterAt.match(/[\s\n]/)) {
+        this.mentionSearchText = textAfterAt;
+        this.updateMentionSuggestions();
+        // mentionSuggestionsの長さで判定
+        this.showMentionSuggestions = this.mentionSuggestions.length > 0 && this.mentionableUsers.length > 0;
+        return;
+      }
+    }
+    
+    this.showMentionSuggestions = false;
+  }
+
+  updateMentionSuggestions() {
+    if (!this.mentionSearchText) {
+      this.mentionSuggestions = [...this.mentionableUsers];
+    } else {
+      const searchLower = this.mentionSearchText.toLowerCase();
+      this.mentionSuggestions = this.mentionableUsers.filter(user =>
+        user.name.toLowerCase().includes(searchLower) ||
+        user.email.toLowerCase().includes(searchLower) ||
+        user.email.split('@')[0].toLowerCase().includes(searchLower)
+      );
+    }
+  }
+
+  selectMention(user: { id: string; name: string; email: string }) {
+    const textarea = this.commentTextarea?.nativeElement;
+    if (!textarea) return;
+
+    const content = textarea.value;
+    const cursorPosition = this.mentionCursorPosition;
+    const textBeforeCursor = content.substring(0, cursorPosition);
+    // 全角・半角両方に対応
+    const lastHalfAt = textBeforeCursor.lastIndexOf('@'); // 半角
+    const lastFullAt = textBeforeCursor.lastIndexOf('＠'); // 全角
+    const lastAtIndex = Math.max(lastHalfAt, lastFullAt);
+    
+    if (lastAtIndex !== -1) {
+      const beforeAt = content.substring(0, lastAtIndex);
+      const afterCursor = content.substring(cursorPosition);
+      // 元の@記号（全角か半角か）を保持
+      const atSymbol = lastHalfAt > lastFullAt ? '@' : '＠';
+      const newContent = `${beforeAt}${atSymbol}${user.name} ${afterCursor}`;
+      
+      this.newCommentContent = newContent;
+      this.showMentionSuggestions = false;
+      
+      // カーソル位置を調整
+      setTimeout(() => {
+        const newCursorPosition = lastAtIndex + user.name.length + 2; // @ + name + space
+        textarea.setSelectionRange(newCursorPosition, newCursorPosition);
+        textarea.focus();
+      }, 0);
+    }
+  }
+
+  hideMentionSuggestions() {
+    setTimeout(() => {
+      this.showMentionSuggestions = false;
+    }, 200);
+  }
+
   async addComment() {
     if (!this.task || !this.newCommentContent.trim()) return;
 
@@ -1012,6 +1441,9 @@ export class TaskDetailComponent implements OnInit {
         return;
       }
 
+      // メンションをパース
+      const mentionedUserIds = this.parseMentions(this.newCommentContent.trim());
+
       const newComment: Comment = {
         id: Date.now().toString(),
         userId: user.uid,
@@ -1019,6 +1451,11 @@ export class TaskDetailComponent implements OnInit {
         content: this.newCommentContent.trim(),
         createdAt: Timestamp.now()
       };
+
+      // mentionedUserIdsが空でない場合のみ追加
+      if (mentionedUserIds.length > 0) {
+        newComment.mentionedUserIds = mentionedUserIds;
+      }
 
       const currentComments = this.task.comments || [];
       const updatedComments = [...currentComments, newComment];
@@ -1028,8 +1465,34 @@ export class TaskDetailComponent implements OnInit {
         comments: updatedComments
       }, true);
 
+      // メンションされたユーザーに通知を送信（自分以外）
+      if (mentionedUserIds.length > 0 && this.task) {
+        for (const mentionedUserId of mentionedUserIds) {
+          if (mentionedUserId !== user.uid) {
+            try {
+              await this.notificationService.createNotification({
+                userId: mentionedUserId,
+                type: NotificationType.TaskUpdated,
+                title: 'コメントでメンションされました',
+                message: `${user.displayName || user.email || 'Unknown'}さんがタスク「${this.task.title}」のコメントであなたをメンションしました`,
+                taskId: this.task.id,
+                projectId: this.task.projectId
+              });
+            } catch (error) {
+              console.error('Error sending mention notification:', error);
+            }
+          }
+        }
+      }
+
       this.newCommentContent = '';
+      this.showMentionSuggestions = false;
       await this.loadTask(this.task.id);
+      // 未読コメント数を再計算（新規コメントは自分が追加したので既読扱い）
+      await this.loadUnreadCommentCount();
+      
+      // サイドバーの未読コメント数を更新
+      window.dispatchEvent(new CustomEvent('commentUpdated'));
     } catch (error: any) {
       alert('コメントの追加に失敗しました: ' + error.message);
     }
@@ -1064,6 +1527,89 @@ export class TaskDetailComponent implements OnInit {
 
   toggleCommentsTab() {
     this.showCommentsTab = !this.showCommentsTab;
+    // コメントタブが開かれた時に既読にする
+    if (this.showCommentsTab && this.task) {
+      this.markCommentsAsRead(this.task.id);
+      // 未読コメント数を再計算
+      this.loadUnreadCommentCount();
+    }
+  }
+
+  // 未読コメント数を読み込む
+  async loadUnreadCommentCount() {
+    const user = this.authService.currentUser;
+    if (!user || !this.task) {
+      this.unreadCommentCount = 0;
+      this.readCommentIds = new Set();
+      return;
+    }
+
+    try {
+      // 既読状態を取得
+      const readStatusRef = doc(db, 'commentReadStatus', `${user.uid}_${this.task.id}`);
+      const readStatusSnap = await getDoc(readStatusRef);
+      
+      if (!readStatusSnap.exists()) {
+        // 既読状態が存在しない場合、全コメントを未読とする
+        this.readCommentIds = new Set();
+        this.unreadCommentCount = this.task.comments?.length || 0;
+        return;
+      }
+
+      const readStatus = readStatusSnap.data();
+      this.readCommentIds = new Set(readStatus?.['readCommentIds'] || []);
+      
+      // 未読コメント数を計算
+      if (!this.task.comments || this.task.comments.length === 0) {
+        this.unreadCommentCount = 0;
+      } else {
+        this.unreadCommentCount = this.task.comments.filter(
+          comment => !this.readCommentIds.has(comment.id)
+        ).length;
+      }
+    } catch (error) {
+      console.error('Error loading unread comment count:', error);
+      this.unreadCommentCount = 0;
+      this.readCommentIds = new Set();
+    }
+  }
+
+  // コメントが未読かどうかを判定
+  isCommentUnread(commentId: string): boolean {
+    return !this.readCommentIds.has(commentId);
+  }
+
+  // コメントを既読にする
+  async markCommentsAsRead(taskId: string) {
+    const user = this.authService.currentUser;
+    if (!user) return;
+    
+    const task = this.task;
+    if (!task || !task.comments || task.comments.length === 0) return;
+    
+    try {
+      // 現在のタスクの全コメントIDを取得
+      const allCommentIds = task.comments.map(c => c.id);
+      
+      // commentReadStatusを更新
+      const readStatusRef = doc(db, 'commentReadStatus', `${user.uid}_${taskId}`);
+      await setDoc(readStatusRef, {
+        userId: user.uid,
+        taskId: taskId,
+        readCommentIds: allCommentIds,
+        lastReadAt: Timestamp.now()
+      }, { merge: true });
+      
+      // 既読IDセットを更新
+      this.readCommentIds = new Set(allCommentIds);
+      // 未読コメント数を再計算
+      await this.loadUnreadCommentCount();
+      
+      // サイドバーの未読コメント数を更新
+      window.dispatchEvent(new CustomEvent('commentUpdated'));
+    } catch (error) {
+      console.error('Error marking comments as read:', error);
+    }
   }
 
   get sortedComments(): Comment[] {
@@ -1423,5 +1969,82 @@ export class TaskDetailComponent implements OnInit {
     const totalSeconds = Math.max(0, (endTime.getTime() - startTime.getTime()) / 1000 - (breakDuration * 60));
     return totalSeconds;
   }
-}
 
+  // 子タスクかどうかを判定するプロパティ
+  get isChildTask(): boolean {
+    if (!this.task?.parentTaskId) {
+      return false;
+    }
+    // 現在のタスクIDを取得
+    const currentTaskId = this.route.snapshot.paramMap.get('id');
+    // parentTaskIdが存在し、かつ現在のタスクIDと異なる場合のみ子タスク
+    return this.task.parentTaskId !== currentTaskId;
+  }
+
+  // 親タスク詳細ページに遷移するメソッド
+  private isNavigating = false;
+  navigateToParentTask(event?: Event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    
+    // 既にナビゲーション中の場合はスキップ
+    if (this.isNavigating) {
+      return;
+    }
+    
+    console.log('navigateToParentTask called');
+    console.log('task:', this.task);
+    console.log('parentTaskId:', this.task?.parentTaskId);
+    
+    if (!this.task?.parentTaskId) {
+      console.warn('parentTaskId is missing');
+      return;
+    }
+    
+    // 現在のタスクIDを取得
+    const currentTaskId = this.route.snapshot.paramMap.get('id');
+    
+    // 既に親タスクのページにいる場合はスキップ
+    if (currentTaskId === this.task.parentTaskId) {
+      console.log('Already on parent task page');
+      return;
+    }
+    
+    this.isNavigating = true;
+    const parentTaskId = this.task.parentTaskId;
+    console.log('Navigating to parent task:', parentTaskId);
+    
+    // router.navigateを使用して、onSameUrlNavigation: 'reload'を設定
+    // 遷移後、ngOnInitが自動的に実行されるため、手動でloadTaskを呼び出す必要はない
+    this.router.navigate(['/task', parentTaskId], {
+      queryParams: { edit: 'true' },
+      onSameUrlNavigation: 'reload'
+    }).then(
+      (success) => {
+        console.log('Navigation successful:', success);
+        this.isNavigating = false;
+      },
+      (error) => {
+        console.error('Navigation failed:', error);
+        this.isNavigating = false;
+      }
+    );
+  }
+
+  // 繰り返しタイプのラベルを取得するメソッド
+  getRecurrenceLabel(recurrence: RecurrenceType): string {
+    const labels: { [key: string]: string } = {
+      'none': '繰り返しなし',
+      'daily': '毎日',
+      'weekly': '毎週',
+      'biweekly': '隔週',
+      'monthly': '毎月',
+      'yearly': '毎年'
+    };
+    return labels[recurrence] || recurrence;
+  }
+}
+  
+ 

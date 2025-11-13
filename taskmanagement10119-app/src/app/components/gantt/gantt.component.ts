@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { Location } from '@angular/common';
 import { TaskService } from '../../services/task.service';
 import { ProjectService } from '../../services/project.service';
 import { AuthService } from '../../services/auth.service';
@@ -25,6 +26,7 @@ interface GanttProject {
   project: Project;
   startDateIndex: number; // 開始日のインデックス
   durationDays: number;
+  actualDurationDays?: number;
   isStartTruncated?: boolean;  // 左端が範囲外か
   isEndTruncated?: boolean;     // 右端が範囲外か
 }
@@ -39,6 +41,7 @@ interface GanttProject {
 export class GanttComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private location = inject(Location);
   private taskService = inject(TaskService);
   private projectService = inject(ProjectService);
   private authService = inject(AuthService);
@@ -64,16 +67,36 @@ export class GanttComponent implements OnInit, OnDestroy {
   userTeamIds: string[] = [];
   userTeams: Team[] = [];
 
+  // フィルター設定（複数選択対応）
+  statusFilters: Set<string> = new Set();
+  priorityFilters: Set<string> = new Set();
+  taskTypeFilters: Set<string> = new Set();
+  overdueFilter: boolean = true; // 期限切れフィルター（独立）
+
+  // プロジェクト用フィルター設定
+  projectStatusFilters: Set<string> = new Set();
+
+  // ソート設定
+  sortBy: 'endDate' | 'priority' | 'title' | 'startDate' = 'endDate';
+  sortOrder: 'asc' | 'desc' = 'asc';
+
+  // プロジェクト用ソート設定
+  projectSortBy: 'endDate' | 'createdAt' | 'name' = 'endDate';
+  projectSortOrder: 'asc' | 'desc' = 'asc';
+
   // ドラッグ関連
   isDragging = false;
   dragType: 'start' | 'end' | 'move' | null = null;
   draggingTaskId: string | null = null;
+  draggingProjectId: string | null = null; // プロジェクト用
+  dragItemType: 'task' | 'project' | null = null; // ドラッグ中のアイテムタイプ
   dragStartX = 0;
   dragStartY = 0; // クリックとドラッグを区別するため
   dragStartDate: Date | null = null;
   dragStartEndDate: Date | null = null; // バー全体ドラッグ用
   showDateEditDialog = false;
   editingTaskId: string | null = null;
+  editingProjectId: string | null = null; // プロジェクト用
   editingStartDate: Date | null = null;
   editingEndDate: Date | null = null;
 
@@ -88,6 +111,14 @@ export class GanttComponent implements OnInit, OnDestroy {
     // localStorageから初期状態を取得
     this.loadViewModeStateFromStorage();
     
+    // 現在のビューモードに対応するフィルターを復元
+    this.loadFiltersFromStorage();
+    
+    // フィルターが保存されていない場合のみデフォルト値を設定
+    if (!this.hasFiltersInStorage()) {
+      this.initializeDefaultFilters();
+    }
+    
     // 個人/チーム切り替えの変更を監視
     window.addEventListener('viewModeChanged', async (event: any) => {
       if (event.detail) {
@@ -95,6 +126,8 @@ export class GanttComponent implements OnInit, OnDestroy {
         this.selectedTeamId = event.detail.selectedTeamId;
         this.userTeamIds = event.detail.userTeamIds || this.userTeamIds;
       }
+      // ビューモード変更時はフィルターを初期化
+      this.initializeDefaultFilters();
       // チーム情報を再読み込みしてからデータを読み込む
       await this.loadUserTeams();
       this.loadData();
@@ -108,6 +141,24 @@ export class GanttComponent implements OnInit, OnDestroy {
       }
       // user が null でも何もしない（認証状態の初期化中の場合があるため）
     });
+  }
+
+  // フィルターのデフォルト値を設定（全て選択状態、完了済みを含む）
+  initializeDefaultFilters() {
+    // ステータスフィルター: 未着手、進行中、完了済み
+    this.statusFilters = new Set(['not_started', 'in_progress', 'completed']);
+    
+    // 期限切れフィルター: デフォルトで有効
+    this.overdueFilter = true;
+    
+    // 優先度フィルター: 重要、普通、低め、なし
+    this.priorityFilters = new Set(['important', 'normal', 'low', 'none']);
+    
+    // タスクタイプフィルター: 通常、会議、定期、プロジェクト、その他
+    this.taskTypeFilters = new Set(['normal', 'meeting', 'regular', 'project', 'other']);
+
+    // プロジェクト用ステータスフィルター: 未開始、進行中、完了
+    this.projectStatusFilters = new Set(['not_started', 'in_progress', 'completed']);
   }
 
   loadViewModeStateFromStorage() {
@@ -124,6 +175,53 @@ export class GanttComponent implements OnInit, OnDestroy {
     } catch (error) {
       console.error('Error loading view mode state from storage:', error);
     }
+  }
+
+  // 現在のビューモードに対応するキーを取得
+  private getFiltersStorageKey(): string {
+    return `ganttFilters_${this.taskViewMode}`;
+  }
+
+  // フィルター状態をlocalStorageに保存
+  saveFiltersToStorage() {
+    try {
+      const filters = {
+        statusFilters: Array.from(this.statusFilters),
+        priorityFilters: Array.from(this.priorityFilters),
+        taskTypeFilters: Array.from(this.taskTypeFilters),
+        overdueFilter: this.overdueFilter,
+        projectStatusFilters: Array.from(this.projectStatusFilters),
+        sortBy: this.sortBy,
+        sortOrder: this.sortOrder
+      };
+      localStorage.setItem(this.getFiltersStorageKey(), JSON.stringify(filters));
+    } catch (error) {
+      console.error('Error saving filters to storage:', error);
+    }
+  }
+
+  // localStorageからフィルター状態を復元
+  loadFiltersFromStorage() {
+    try {
+      const saved = localStorage.getItem(this.getFiltersStorageKey());
+      if (saved) {
+        const filters = JSON.parse(saved);
+        this.statusFilters = new Set(filters.statusFilters || []);
+        this.priorityFilters = new Set(filters.priorityFilters || []);
+        this.taskTypeFilters = new Set(filters.taskTypeFilters || []);
+        this.overdueFilter = filters.overdueFilter !== undefined ? filters.overdueFilter : true;
+        this.projectStatusFilters = new Set(filters.projectStatusFilters || []);
+        this.sortBy = filters.sortBy || 'endDate';
+        this.sortOrder = filters.sortOrder || 'asc';
+      }
+    } catch (error) {
+      console.error('Error loading filters from storage:', error);
+    }
+  }
+
+  // フィルターが保存されているかチェック
+  hasFiltersInStorage(): boolean {
+    return localStorage.getItem(this.getFiltersStorageKey()) !== null;
   }
 
   async loadUserTeams() {
@@ -205,7 +303,7 @@ export class GanttComponent implements OnInit, OnDestroy {
 
   totalDays = 0; // 全期間の日数（計算用）
 
-  generateDateColumnsAndRecalculate() {
+  generateDateColumnsAndRecalculate(skipSort: boolean = false) {
     if (!this.customDateRange) return;
     
     this.dateColumns = [];
@@ -250,10 +348,10 @@ export class GanttComponent implements OnInit, OnDestroy {
     }
     
     // ガントチャートの位置を計算
-    this.recalculateGanttWithAllDates(this.dateColumns);
+    this.recalculateGanttWithAllDates(this.dateColumns, skipSort);
   }
 
-  recalculateGanttWithAllDates(allDateColumns: Date[]) {
+  recalculateGanttWithAllDates(allDateColumns: Date[], skipSort: boolean = false) {
     if (!this.customDateRange || !this.dateRange || allDateColumns.length === 0) return;
 
     // タスクの再計算
@@ -272,7 +370,7 @@ export class GanttComponent implements OnInit, OnDestroy {
       const weekEndOnly = new Date(weekEnd.getFullYear(), weekEnd.getMonth(), weekEnd.getDate());
       
       // フィルタリング
-      const filteredTasks = this.allTasks.filter(task => {
+      let filteredTasks = this.allTasks.filter(task => {
         // 現在表示している週（customDateRange）とタスクが重なっているかチェック
         const taskStart = task.startDate.toDate();
         const taskEnd = task.endDate.toDate();
@@ -293,6 +391,77 @@ export class GanttComponent implements OnInit, OnDestroy {
         
         return overlaps;
       });
+
+      // ステータスフィルター（複数選択対応）
+      if (this.statusFilters.size > 0) {
+        filteredTasks = filteredTasks.filter(task => this.statusFilters.has(task.status));
+      }
+
+      // 期限切れフィルター（独立）
+      if (!this.overdueFilter) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        filteredTasks = filteredTasks.filter(task => {
+          const endDate = task.endDate.toDate();
+          const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+          // 期限切れでないタスクのみ残す
+          return endDateOnly >= today || task.status === 'completed';
+        });
+      }
+
+      // 優先度フィルター（複数選択対応）
+      if (this.priorityFilters.size > 0) {
+        filteredTasks = filteredTasks.filter(task => this.priorityFilters.has(task.priority));
+      }
+
+      // タスクタイプフィルター（複数選択対応）
+      if (this.taskTypeFilters.size > 0) {
+        filteredTasks = filteredTasks.filter(task => {
+          const taskType = task.taskType || 'normal';
+          return this.taskTypeFilters.has(taskType);
+        });
+      }
+      
+      // ソート（skipSortがfalseの場合のみ）
+      if (!skipSort) {
+        filteredTasks.sort((a, b) => {
+          let comparison = 0;
+
+          switch (this.sortBy) {
+            case 'endDate':
+              comparison = a.endDate.toMillis() - b.endDate.toMillis();
+              break;
+            case 'startDate':
+              comparison = a.startDate.toMillis() - b.startDate.toMillis();
+              break;
+            case 'priority':
+              const priorityOrder = ['important', 'normal', 'low', 'none', 'custom'];
+              const aPriority = priorityOrder.indexOf(a.priority) !== -1 ? priorityOrder.indexOf(a.priority) : 999;
+              const bPriority = priorityOrder.indexOf(b.priority) !== -1 ? priorityOrder.indexOf(b.priority) : 999;
+              comparison = aPriority - bPriority;
+              break;
+            case 'title':
+              comparison = a.title.localeCompare(b.title);
+              break;
+          }
+
+          return this.sortOrder === 'asc' ? comparison : -comparison;
+        });
+      } else {
+        // ソートをスキップする場合、現在のganttTasksの順序を維持
+        // ドラッグ中のタスクの順序を保持するため、既存のganttTasksの順序に基づいて並び替え
+        const currentOrderMap = new Map<string, number>();
+        this.ganttTasks.forEach((ganttTask, index) => {
+          currentOrderMap.set(ganttTask.task.id, index);
+        });
+        
+        filteredTasks.sort((a, b) => {
+          const aIndex = currentOrderMap.get(a.id) ?? 999999;
+          const bIndex = currentOrderMap.get(b.id) ?? 999999;
+          return aIndex - bIndex;
+        });
+      }
       
       console.log('フィルタ後のタスク数:', filteredTasks.length);
       
@@ -397,17 +566,68 @@ export class GanttComponent implements OnInit, OnDestroy {
       const weekEnd = new Date(this.customDateRange.end);
       weekEnd.setHours(23,59,59,999);
       
-      this.ganttProjects = this.allProjects
-        .filter(project => {
-          // 現在表示している週（customDateRange）とプロジェクトが重なっているかチェック
-          const projStart = project.startDate.toDate();
-          const projEnd = project.endDate.toDate();
-          const projStartOnly = new Date(projStart.getFullYear(), projStart.getMonth(), projStart.getDate());
-          const projEndOnly = new Date(projEnd.getFullYear(), projEnd.getMonth(), projEnd.getDate());
-          
-          // プロジェクトの期間と週の期間が重なっているか
-          return projStartOnly <= weekEnd && projEndOnly >= weekStart;
-        })
+      const weekStartOnly = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate());
+      const weekEndOnly = new Date(weekEnd.getFullYear(), weekEnd.getMonth(), weekEnd.getDate());
+      
+      // フィルタリング
+      let filteredProjects = this.allProjects.filter(project => {
+        // 現在表示している週（customDateRange）とプロジェクトが重なっているかチェック
+        const projStart = project.startDate.toDate();
+        const projEnd = project.endDate.toDate();
+        const projStartOnly = new Date(projStart.getFullYear(), projStart.getMonth(), projStart.getDate());
+        const projEndOnly = new Date(projEnd.getFullYear(), projEnd.getMonth(), projEnd.getDate());
+        
+        // プロジェクトの期間と週の期間が重なっているか
+        const overlaps = projStartOnly <= weekEndOnly && projEndOnly >= weekStartOnly;
+        
+        if (!overlaps) {
+          return false;
+        }
+        
+        return true;
+      });
+
+      // ステータスフィルター（複数選択対応）
+      if (this.projectStatusFilters.size > 0) {
+        filteredProjects = filteredProjects.filter(project => this.projectStatusFilters.has(project.status));
+      }
+
+      // ソート（skipSortがfalseの場合のみ）
+      if (!skipSort) {
+        filteredProjects.sort((a, b) => {
+          let comparison = 0;
+
+          switch (this.projectSortBy) {
+            case 'endDate':
+              comparison = a.endDate.toMillis() - b.endDate.toMillis();
+              break;
+            case 'createdAt':
+              // プロジェクトにcreatedAtがない場合は、startDateを使用
+              comparison = a.startDate.toMillis() - b.startDate.toMillis();
+              break;
+            case 'name':
+              comparison = a.name.localeCompare(b.name);
+              break;
+          }
+
+          return this.projectSortOrder === 'asc' ? comparison : -comparison;
+        });
+      } else {
+        // ソートをスキップする場合、現在のganttProjectsの順序を維持
+        // ドラッグ中のプロジェクトの順序を保持するため、既存のganttProjectsの順序に基づいて並び替え
+        const currentOrderMap = new Map<string, number>();
+        this.ganttProjects.forEach((ganttProject, index) => {
+          currentOrderMap.set(ganttProject.project.id, index);
+        });
+        
+        filteredProjects.sort((a, b) => {
+          const aIndex = currentOrderMap.get(a.id) ?? 999999;
+          const bIndex = currentOrderMap.get(b.id) ?? 999999;
+          return aIndex - bIndex;
+        });
+      }
+      
+      this.ganttProjects = filteredProjects
         .map(project => {
           const projStart = project.startDate.toDate();
           const projEnd = project.endDate.toDate();
@@ -488,10 +708,16 @@ export class GanttComponent implements OnInit, OnDestroy {
           const isStartTruncated = projStartOnly < weekStartOnly;
           const isEndTruncated = projEndOnly > weekEndOnly;
 
+          // 実際のプロジェクト期間（日数）
+          const actualDurationDays = Math.ceil(
+            (projEndOnly.getTime() - projStartOnly.getTime()) / (1000 * 60 * 60 * 24)
+          ) + 1;
+
           return {
             project,
             startDateIndex: startIndex,
             durationDays: endIndex - startIndex + 1,
+            actualDurationDays: actualDurationDays,
             isStartTruncated: isStartTruncated,
             isEndTruncated: isEndTruncated
           };
@@ -790,6 +1016,16 @@ export class GanttComponent implements OnInit, OnDestroy {
         this.userTeamIds
       );
 
+      // チーム名を設定
+      for (const project of this.allProjects) {
+        if (project.teamId && !project.teamName) {
+          const team = this.userTeams.find(t => t.id === project.teamId);
+          if (team) {
+            project.teamName = team.name;
+          }
+        }
+      }
+
       if (this.allProjects.length === 0) {
         this.isLoading = false;
         return;
@@ -840,10 +1076,14 @@ export class GanttComponent implements OnInit, OnDestroy {
   }
 
   goBack() {
-    this.router.navigate(['/home']);
+    if (window.history.length > 1) {
+      this.location.back();
+    } else {
+      this.router.navigate(['/home']);
+    }
   }
 
-  // バー全体のドラッグ開始
+  // バー全体のドラッグ開始 - タスク用
   onBarDragStart(event: MouseEvent, taskId: string, currentStartDate: Date, currentEndDate: Date) {
     // ハンドルをクリックした場合はバー全体のドラッグを無視
     const target = event.target as HTMLElement;
@@ -855,7 +1095,9 @@ export class GanttComponent implements OnInit, OnDestroy {
     event.stopPropagation();
     this.isDragging = true;
     this.dragType = 'move';
+    this.dragItemType = 'task';
     this.draggingTaskId = taskId;
+    this.draggingProjectId = null;
     this.dragStartX = event.clientX;
     this.dragStartY = event.clientY;
     this.dragStartDate = new Date(currentStartDate);
@@ -865,13 +1107,39 @@ export class GanttComponent implements OnInit, OnDestroy {
     document.addEventListener('mouseup', this.onDragEnd);
   }
 
-  // ドラッグ開始（左端）
+  // バー全体のドラッグ開始 - プロジェクト用
+  onProjectBarDragStart(event: MouseEvent, projectId: string, currentStartDate: Date, currentEndDate: Date) {
+    // ハンドルをクリックした場合はバー全体のドラッグを無視
+    const target = event.target as HTMLElement;
+    if (target.classList.contains('drag-handle')) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragging = true;
+    this.dragType = 'move';
+    this.dragItemType = 'project';
+    this.draggingTaskId = null;
+    this.draggingProjectId = projectId;
+    this.dragStartX = event.clientX;
+    this.dragStartY = event.clientY;
+    this.dragStartDate = new Date(currentStartDate);
+    this.dragStartEndDate = new Date(currentEndDate);
+    
+    document.addEventListener('mousemove', this.onDragMove);
+    document.addEventListener('mouseup', this.onDragEnd);
+  }
+
+  // ドラッグ開始（左端）- タスク用
   onDragStart(event: MouseEvent, taskId: string, currentStartDate: Date) {
     event.preventDefault();
     event.stopPropagation();
     this.isDragging = true;
     this.dragType = 'start';
+    this.dragItemType = 'task';
     this.draggingTaskId = taskId;
+    this.draggingProjectId = null;
     this.dragStartX = event.clientX;
     this.dragStartDate = new Date(currentStartDate);
     
@@ -879,13 +1147,47 @@ export class GanttComponent implements OnInit, OnDestroy {
     document.addEventListener('mouseup', this.onDragEnd);
   }
 
-  // ドラッグ開始（右端）
+  // ドラッグ開始（右端）- タスク用
   onDragEndStart(event: MouseEvent, taskId: string, currentEndDate: Date) {
     event.preventDefault();
     event.stopPropagation();
     this.isDragging = true;
     this.dragType = 'end';
+    this.dragItemType = 'task';
     this.draggingTaskId = taskId;
+    this.draggingProjectId = null;
+    this.dragStartX = event.clientX;
+    this.dragStartDate = new Date(currentEndDate);
+    
+    document.addEventListener('mousemove', this.onDragMove);
+    document.addEventListener('mouseup', this.onDragEnd);
+  }
+
+  // ドラッグ開始（左端）- プロジェクト用
+  onProjectDragStart(event: MouseEvent, projectId: string, currentStartDate: Date) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragging = true;
+    this.dragType = 'start';
+    this.dragItemType = 'project';
+    this.draggingTaskId = null;
+    this.draggingProjectId = projectId;
+    this.dragStartX = event.clientX;
+    this.dragStartDate = new Date(currentStartDate);
+    
+    document.addEventListener('mousemove', this.onDragMove);
+    document.addEventListener('mouseup', this.onDragEnd);
+  }
+
+  // ドラッグ開始（右端）- プロジェクト用
+  onProjectDragEndStart(event: MouseEvent, projectId: string, currentEndDate: Date) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragging = true;
+    this.dragType = 'end';
+    this.dragItemType = 'project';
+    this.draggingTaskId = null;
+    this.draggingProjectId = projectId;
     this.dragStartX = event.clientX;
     this.dragStartDate = new Date(currentEndDate);
     
@@ -895,11 +1197,24 @@ export class GanttComponent implements OnInit, OnDestroy {
 
   // ドラッグ中
   onDragMove = (event: MouseEvent) => {
-    if (!this.isDragging || !this.dragType || !this.draggingTaskId || !this.dragStartDate || !this.customDateRange) return;
+    if (!this.isDragging || !this.dragType || !this.dragStartDate || !this.customDateRange) return;
+    if (!this.draggingTaskId && !this.draggingProjectId) return;
 
     const deltaX = event.clientX - this.dragStartX;
-    const task = this.allTasks.find(t => t.id === this.draggingTaskId);
-    if (!task) return;
+    
+    // タスクまたはプロジェクトを取得
+    let task: Task | undefined;
+    let project: Project | undefined;
+    
+    if (this.dragItemType === 'task' && this.draggingTaskId) {
+      task = this.allTasks.find(t => t.id === this.draggingTaskId);
+      if (!task) return;
+    } else if (this.dragItemType === 'project' && this.draggingProjectId) {
+      project = this.allProjects.find(p => p.id === this.draggingProjectId);
+      if (!project) return;
+    } else {
+      return;
+    }
 
     // マウスの位置から日付列を計算
     const cellWidth = this.getCellWidth();
@@ -932,8 +1247,14 @@ export class GanttComponent implements OnInit, OnDestroy {
       
       newDate.setHours(0, 0, 0, 0);
       newEndDate.setHours(23, 59, 59, 999);
-      task.startDate = Timestamp.fromDate(newDate);
-      task.endDate = Timestamp.fromDate(newEndDate);
+      
+      if (task) {
+        task.startDate = Timestamp.fromDate(newDate);
+        task.endDate = Timestamp.fromDate(newEndDate);
+      } else if (project) {
+        project.startDate = Timestamp.fromDate(newDate);
+        project.endDate = Timestamp.fromDate(newEndDate);
+      }
     } else {
       // 開始日または終了日のみを変更する場合（既存の処理）
       // 表示範囲内に制限
@@ -945,45 +1266,92 @@ export class GanttComponent implements OnInit, OnDestroy {
       }
 
       if (this.dragType === 'start') {
-        const taskEndDate = task.endDate.toDate();
-        // 日付のみで比較（時刻を無視して1日の期間を許可）
-        const newDateOnly = new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
-        const endDateOnly = new Date(taskEndDate.getFullYear(), taskEndDate.getMonth(), taskEndDate.getDate());
-        
-        if (newDateOnly > endDateOnly) {
-          // 終了日より後になる場合は、終了日と同じ日付にする（1日の期間を許可）
-          newDate.setTime(endDateOnly.getTime());
+        if (task) {
+          const taskEndDate = task.endDate.toDate();
+          // 日付のみで比較（時刻を無視して1日の期間を許可）
+          const newDateOnly = new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+          const endDateOnly = new Date(taskEndDate.getFullYear(), taskEndDate.getMonth(), taskEndDate.getDate());
+          
+          if (newDateOnly > endDateOnly) {
+            // 終了日より後になる場合は、終了日と同じ日付にする（1日の期間を許可）
+            newDate.setTime(endDateOnly.getTime());
+          }
+          newDate.setHours(0, 0, 0, 0);
+          task.startDate = Timestamp.fromDate(newDate);
+        } else if (project) {
+          const projectEndDate = project.endDate.toDate();
+          // 日付のみで比較（時刻を無視して1日の期間を許可）
+          const newDateOnly = new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+          const endDateOnly = new Date(projectEndDate.getFullYear(), projectEndDate.getMonth(), projectEndDate.getDate());
+          
+          if (newDateOnly > endDateOnly) {
+            // 終了日より後になる場合は、終了日と同じ日付にする（1日の期間を許可）
+            newDate.setTime(endDateOnly.getTime());
+          }
+          newDate.setHours(0, 0, 0, 0);
+          project.startDate = Timestamp.fromDate(newDate);
         }
-        newDate.setHours(0, 0, 0, 0);
-        task.startDate = Timestamp.fromDate(newDate);
       } else {
-        const taskStartDate = task.startDate.toDate();
-        // 日付のみで比較（時刻を無視して1日の期間を許可）
-        const newDateOnly = new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
-        const startDateOnly = new Date(taskStartDate.getFullYear(), taskStartDate.getMonth(), taskStartDate.getDate());
-        
-        if (newDateOnly < startDateOnly) {
-          // 開始日より前になる場合は、開始日と同じ日付にする（1日の期間を許可）
-          newDate.setTime(startDateOnly.getTime());
+        if (task) {
+          const taskStartDate = task.startDate.toDate();
+          // 日付のみで比較（時刻を無視して1日の期間を許可）
+          const newDateOnly = new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+          const startDateOnly = new Date(taskStartDate.getFullYear(), taskStartDate.getMonth(), taskStartDate.getDate());
+          
+          if (newDateOnly < startDateOnly) {
+            // 開始日より前になる場合は、開始日と同じ日付にする（1日の期間を許可）
+            newDate.setTime(startDateOnly.getTime());
+          }
+          newDate.setHours(23, 59, 59, 999);
+          task.endDate = Timestamp.fromDate(newDate);
+        } else if (project) {
+          const projectStartDate = project.startDate.toDate();
+          // 日付のみで比較（時刻を無視して1日の期間を許可）
+          const newDateOnly = new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+          const startDateOnly = new Date(projectStartDate.getFullYear(), projectStartDate.getMonth(), projectStartDate.getDate());
+          
+          if (newDateOnly < startDateOnly) {
+            // 開始日より前になる場合は、開始日と同じ日付にする（1日の期間を許可）
+            newDate.setTime(startDateOnly.getTime());
+          }
+          newDate.setHours(23, 59, 59, 999);
+          project.endDate = Timestamp.fromDate(newDate);
         }
-        newDate.setHours(23, 59, 59, 999);
-        task.endDate = Timestamp.fromDate(newDate);
       }
     }
 
-    // ガントチャートを再計算
-    this.generateDateColumnsAndRecalculate();
+    // ガントチャートを再計算（ソートをスキップして順序を維持）
+    this.generateDateColumnsAndRecalculate(true);
   };
 
   // ドラッグ終了
   onDragEnd = async (event?: MouseEvent) => {
-    if (!this.isDragging || !this.dragType || !this.draggingTaskId) {
+    if (!this.isDragging || !this.dragType) {
+      this.resetDragState();
+      return;
+    }
+    if (!this.draggingTaskId && !this.draggingProjectId) {
       this.resetDragState();
       return;
     }
 
-    const task = this.allTasks.find(t => t.id === this.draggingTaskId);
-    if (!task) {
+    // タスクまたはプロジェクトを取得
+    let task: Task | undefined;
+    let project: Project | undefined;
+    
+    if (this.dragItemType === 'task' && this.draggingTaskId) {
+      task = this.allTasks.find(t => t.id === this.draggingTaskId);
+      if (!task) {
+        this.resetDragState();
+        return;
+      }
+    } else if (this.dragItemType === 'project' && this.draggingProjectId) {
+      project = this.allProjects.find(p => p.id === this.draggingProjectId);
+      if (!project) {
+        this.resetDragState();
+        return;
+      }
+    } else {
       this.resetDragState();
       return;
     }
@@ -994,34 +1362,58 @@ export class GanttComponent implements OnInit, OnDestroy {
       Math.abs(event.clientY - this.dragStartY) < 5;
 
     if (wasClick && this.dragType === 'move') {
-      // クリックとして扱う場合はタスク詳細を表示
+      // クリックとして扱う場合は詳細を表示
       this.resetDragState();
-      this.viewTask(task.id);
+      if (task) {
+        this.viewTask(task.id);
+      } else if (project) {
+        this.viewProject(project.id);
+      }
       return;
     }
 
     // 1か月表示の場合は詳細な日付設定ダイアログを表示（バー全体の移動でも同じ）
     if (this.displayPeriod === 'month') {
-      this.editingTaskId = task.id;
-      this.editingStartDate = task.startDate.toDate();
-      this.editingEndDate = task.endDate.toDate();
+      if (task) {
+        this.editingTaskId = task.id;
+        this.editingProjectId = null;
+        this.editingStartDate = task.startDate.toDate();
+        this.editingEndDate = task.endDate.toDate();
+      } else if (project) {
+        this.editingTaskId = null;
+        this.editingProjectId = project.id;
+        this.editingStartDate = project.startDate.toDate();
+        this.editingEndDate = project.endDate.toDate();
+      }
       this.showDateEditDialog = true;
     } else {
       // 週/2週間表示の場合は直接保存
-      await this.saveTaskDates(task.id, task.startDate.toDate(), task.endDate.toDate());
+      if (task) {
+        await this.saveTaskDates(task.id, task.startDate.toDate(), task.endDate.toDate());
+      } else if (project) {
+        await this.saveProjectDates(project.id, project.startDate.toDate(), project.endDate.toDate());
+      }
     }
 
     this.resetDragState();
+    
+    // ドラッグ終了後にソートを含めて再計算
+    this.generateDateColumnsAndRecalculate();
   };
 
   resetDragState() {
     this.isDragging = false;
     this.dragType = null;
+    this.dragItemType = null;
     this.draggingTaskId = null;
+    this.draggingProjectId = null;
     this.dragStartX = 0;
     this.dragStartY = 0;
     this.dragStartDate = null;
     this.dragStartEndDate = null;
+    // ツールチップをリセット
+    this.hoveredTask = null;
+    this.hoveredProject = null;
     document.removeEventListener('mousemove', this.onDragMove);
     document.removeEventListener('mouseup', this.onDragEnd);
   }
@@ -1040,6 +1432,27 @@ export class GanttComponent implements OnInit, OnDestroy {
 
   async saveTaskDates(taskId: string, startDate: Date, endDate: Date) {
     try {
+      const user = this.authService.currentUser;
+      if (!user) {
+        alert('ログインが必要です');
+        return;
+      }
+
+      const task = this.allTasks.find(t => t.id === taskId);
+      if (!task) {
+        alert('タスクが見つかりません');
+        return;
+      }
+
+      // 編集権限をチェック
+      const canEdit = await this.taskService.canEditTask(task, user.uid);
+      if (!canEdit) {
+        alert('このタスクを編集する権限がありません');
+        // データを再読み込みして元の状態に戻す
+        await this.loadTasks();
+        return;
+      }
+
       // ガントチャートでのドラッグ変更時は自動コメントをスキップ（頻繁な変更のため）
       await this.taskService.updateTask(taskId, {
         startDate: Timestamp.fromDate(startDate),
@@ -1056,8 +1469,47 @@ export class GanttComponent implements OnInit, OnDestroy {
     }
   }
 
+  async saveProjectDates(projectId: string, startDate: Date, endDate: Date) {
+    try {
+      const user = this.authService.currentUser;
+      if (!user) {
+        alert('ログインが必要です');
+        return;
+      }
+
+      const project = this.allProjects.find(p => p.id === projectId);
+      if (!project) {
+        alert('プロジェクトが見つかりません');
+        return;
+      }
+
+      // 編集権限をチェック
+      const canEdit = await this.projectService.canEditProject(project.id, user.uid);
+      if (!canEdit) {
+        alert('このプロジェクトを編集する権限がありません');
+        // データを再読み込みして元の状態に戻す
+        await this.loadProjects();
+        return;
+      }
+
+      // ガントチャートでのドラッグ変更時は自動コメントをスキップ（頻繁な変更のため）
+      await this.projectService.updateProject(projectId, {
+        startDate: Timestamp.fromDate(startDate),
+        endDate: Timestamp.fromDate(endDate)
+      }, true);
+      
+      // データを再読み込み
+      await this.loadProjects();
+    } catch (error: any) {
+      console.error('Error updating project dates:', error);
+      alert('プロジェクトの期間更新に失敗しました: ' + error.message);
+      // エラー時はデータを再読み込み
+      await this.loadProjects();
+    }
+  }
+
   async confirmDateEdit() {
-    if (!this.editingTaskId || !this.editingStartDate || !this.editingEndDate) return;
+    if ((!this.editingTaskId && !this.editingProjectId) || !this.editingStartDate || !this.editingEndDate) return;
 
     // 日付のみで比較（時刻を無視して1日の期間を許可）
     const startDateOnly = new Date(this.editingStartDate.getFullYear(), this.editingStartDate.getMonth(), this.editingStartDate.getDate());
@@ -1073,9 +1525,15 @@ export class GanttComponent implements OnInit, OnDestroy {
     startDateOnly.setHours(0, 0, 0, 0);
     endDateOnly.setHours(23, 59, 59, 999);
 
-    await this.saveTaskDates(this.editingTaskId, startDateOnly, endDateOnly);
+    if (this.editingTaskId) {
+      await this.saveTaskDates(this.editingTaskId, startDateOnly, endDateOnly);
+    } else if (this.editingProjectId) {
+      await this.saveProjectDates(this.editingProjectId, startDateOnly, endDateOnly);
+    }
+    
     this.showDateEditDialog = false;
     this.editingTaskId = null;
+    this.editingProjectId = null;
     this.editingStartDate = null;
     this.editingEndDate = null;
   }
@@ -1084,10 +1542,15 @@ export class GanttComponent implements OnInit, OnDestroy {
     // 変更をキャンセルして元に戻す
     this.showDateEditDialog = false;
     this.editingTaskId = null;
+    this.editingProjectId = null;
     this.editingStartDate = null;
     this.editingEndDate = null;
     // データを再読み込みして元の状態に戻す
-    this.loadTasks();
+    if (this.viewMode === 'tasks') {
+      this.loadTasks();
+    } else {
+      this.loadProjects();
+    }
   }
 
   onStartDateChange(dateString: string) {
@@ -1406,6 +1869,117 @@ export class GanttComponent implements OnInit, OnDestroy {
     const startStr = this.formatDateForInput(start);
     const endStr = this.formatDateForInput(end);
     return `${startStr} 〜 ${endStr}`;
+  }
+
+  // フィルター変更（複数選択対応）
+  onStatusFilterChange(status: string, checked: boolean) {
+    if (checked) {
+      this.statusFilters.add(status);
+    } else {
+      this.statusFilters.delete(status);
+    }
+    this.saveFiltersToStorage();
+    this.generateDateColumnsAndRecalculate();
+  }
+
+  onPriorityFilterChange(priority: string, checked: boolean) {
+    if (checked) {
+      this.priorityFilters.add(priority);
+    } else {
+      this.priorityFilters.delete(priority);
+    }
+    this.saveFiltersToStorage();
+    this.generateDateColumnsAndRecalculate();
+  }
+
+  onTaskTypeFilterChange(taskType: string, checked: boolean) {
+    if (checked) {
+      this.taskTypeFilters.add(taskType);
+    } else {
+      this.taskTypeFilters.delete(taskType);
+    }
+    this.saveFiltersToStorage();
+    this.generateDateColumnsAndRecalculate();
+  }
+
+  // 期限切れフィルター変更
+  onOverdueFilterChange(checked: boolean) {
+    this.overdueFilter = checked;
+    this.saveFiltersToStorage();
+    this.generateDateColumnsAndRecalculate();
+  }
+
+  // タスクタイプラベルの取得
+  getTaskTypeLabel(taskType: string): string {
+    const typeMap: { [key: string]: string } = {
+      'normal': '通常',
+      'meeting': '会議',
+      'regular': '定期',
+      'project': 'プロジェクト',
+      'other': 'その他'
+    };
+    return typeMap[taskType] || taskType;
+  }
+
+  // ソート変更
+  onSortChange(newSortBy: 'endDate' | 'priority' | 'title' | 'startDate') {
+    // 変更前の値を保持
+    const oldSortBy = this.sortBy;
+    
+    // 新しい値を設定
+    this.sortBy = newSortBy;
+    
+    // 同じ項目なら順序を切り替え、異なる項目なら昇順にリセット
+    if (oldSortBy === newSortBy) {
+      this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortOrder = 'asc';
+    }
+    
+    this.saveFiltersToStorage();
+    this.generateDateColumnsAndRecalculate();
+  }
+
+  // 昇順/降順を切り替えるメソッド
+  toggleSortOrder() {
+    this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+    this.saveFiltersToStorage();
+    this.generateDateColumnsAndRecalculate();
+  }
+
+  // プロジェクト用ステータスフィルター変更
+  onProjectStatusFilterChange(status: string, checked: boolean) {
+    if (checked) {
+      this.projectStatusFilters.add(status);
+    } else {
+      this.projectStatusFilters.delete(status);
+    }
+    this.saveFiltersToStorage();
+    this.generateDateColumnsAndRecalculate();
+  }
+
+  // プロジェクト用ソート変更
+  onProjectSortChange(newSortBy: 'endDate' | 'createdAt' | 'name') {
+    // 変更前の値を保持
+    const oldSortBy = this.projectSortBy;
+    
+    // 新しい値を設定
+    this.projectSortBy = newSortBy;
+    
+    // 同じ項目なら順序を切り替え、異なる項目なら昇順にリセット
+    if (oldSortBy === newSortBy) {
+      this.projectSortOrder = this.projectSortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.projectSortOrder = 'asc';
+    }
+    
+    this.generateDateColumnsAndRecalculate();
+  }
+
+  // プロジェクト用昇順/降順を切り替えるメソッド
+  toggleProjectSortOrder() {
+    this.projectSortOrder = this.projectSortOrder === 'asc' ? 'desc' : 'asc';
+    this.generateDateColumnsAndRecalculate();
   }
     
 }

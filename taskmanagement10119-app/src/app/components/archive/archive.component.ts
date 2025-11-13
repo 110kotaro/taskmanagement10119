@@ -2,13 +2,14 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { Location } from '@angular/common';
 import { Timestamp } from 'firebase/firestore';
 import { AuthService } from '../../services/auth.service';
 import { TaskService } from '../../services/task.service';
 import { ProjectService } from '../../services/project.service';
 import { TeamService } from '../../services/team.service';
 import { Task, TaskStatus } from '../../models/task.model';
-import { Project } from '../../models/project.model';
+import { Project, ProjectStatus } from '../../models/project.model';
 import { Team } from '../../models/team.model';
 
 type ArchiveItemType = 'task' | 'project';
@@ -18,7 +19,7 @@ interface ArchiveItem {
   type: ArchiveItemType;
   id: string;
   title: string;
-  status?: TaskStatus;
+  status?: TaskStatus | ProjectStatus;  // タスクまたはプロジェクトのステータス
   isDeleted: boolean;
   deletedAt?: Timestamp;
   completedAt?: Timestamp;
@@ -31,6 +32,7 @@ interface ArchiveItem {
   teamId?: string; // チームID
   teamName?: string; // チーム名
   createdAt: Timestamp;
+  canPermanentlyDelete?: boolean; // 完全削除権限フラグ
 }
 
 @Component({
@@ -46,6 +48,7 @@ export class ArchiveComponent implements OnInit {
   private projectService = inject(ProjectService);
   private teamService = inject(TeamService);
   private router = inject(Router);
+  private location = inject(Location);
 
   archiveItems: ArchiveItem[] = [];
   filteredItems: ArchiveItem[] = [];
@@ -94,6 +97,14 @@ export class ArchiveComponent implements OnInit {
     // localStorageから初期状態を取得
     this.loadViewModeStateFromStorage();
     
+    // 現在のビューモードに対応するフィルターを復元
+    this.loadFiltersFromStorage();
+    
+    // フィルターが保存されていない場合のみデフォルト値を設定
+    if (!this.hasFiltersInStorage()) {
+      this.initializeDefaultFilters();
+    }
+    
     // 個人/チーム切り替えの変更を監視
     window.addEventListener('viewModeChanged', (event: any) => {
       if (event.detail) {
@@ -101,6 +112,8 @@ export class ArchiveComponent implements OnInit {
         this.selectedTeamId = event.detail.selectedTeamId;
         this.userTeamIds = event.detail.userTeamIds || this.userTeamIds;
       }
+      // ビューモード変更時はフィルターを初期化
+      this.initializeDefaultFilters();
       this.loadArchiveData();
     });
     
@@ -121,6 +134,73 @@ export class ArchiveComponent implements OnInit {
     } catch (error) {
       console.error('Error loading view mode state from storage:', error);
     }
+  }
+
+  // フィルターのデフォルト値を設定
+  initializeDefaultFilters() {
+    this.itemTypeFilter = 'all';
+    this.archiveFilter = 'all';
+    this.selectedAssigneeId = 'all';
+    this.selectedProjectId = null;
+    this.projectNameInput = '';
+    this.dateFilterType = 'deleted';
+    this.dateFilterStart = '';
+    this.dateFilterEnd = '';
+    this.dateFilterEnabled = false;
+    this.sortOrder = 'desc';
+  }
+
+  // 現在のビューモードに対応するキーを取得
+  private getFiltersStorageKey(): string {
+    return `archiveFilters_${this.taskViewMode}`;
+  }
+
+  // フィルター状態をlocalStorageに保存
+  saveFiltersToStorage() {
+    try {
+      const filters = {
+        itemTypeFilter: this.itemTypeFilter,
+        archiveFilter: this.archiveFilter,
+        selectedAssigneeId: this.selectedAssigneeId,
+        selectedProjectId: this.selectedProjectId,
+        projectNameInput: this.projectNameInput,
+        dateFilterType: this.dateFilterType,
+        dateFilterStart: this.dateFilterStart,
+        dateFilterEnd: this.dateFilterEnd,
+        dateFilterEnabled: this.dateFilterEnabled,
+        sortOrder: this.sortOrder
+      };
+      localStorage.setItem(this.getFiltersStorageKey(), JSON.stringify(filters));
+    } catch (error) {
+      console.error('Error saving filters to storage:', error);
+    }
+  }
+
+  // localStorageからフィルター状態を復元
+  loadFiltersFromStorage() {
+    try {
+      const saved = localStorage.getItem(this.getFiltersStorageKey());
+      if (saved) {
+        const filters = JSON.parse(saved);
+        this.itemTypeFilter = filters.itemTypeFilter || 'all';
+        this.archiveFilter = filters.archiveFilter || 'all';
+        this.selectedAssigneeId = filters.selectedAssigneeId || 'all';
+        this.selectedProjectId = filters.selectedProjectId || null;
+        this.projectNameInput = filters.projectNameInput || '';
+        this.dateFilterType = filters.dateFilterType || 'deleted';
+        this.dateFilterStart = filters.dateFilterStart || '';
+        this.dateFilterEnd = filters.dateFilterEnd || '';
+        this.dateFilterEnabled = filters.dateFilterEnabled || false;
+        this.sortOrder = filters.sortOrder || 'desc';
+      }
+    } catch (error) {
+      console.error('Error loading filters from storage:', error);
+    }
+  }
+
+  // フィルターが保存されているかチェック
+  hasFiltersInStorage(): boolean {
+    return localStorage.getItem(this.getFiltersStorageKey()) !== null;
   }
 
   async loadUserTeams() {
@@ -184,12 +264,42 @@ export class ArchiveComponent implements OnInit {
         taskIds: allDeletedTasks.map(t => ({ id: t.id, title: t.title, isDeleted: t.isDeleted }))
       });
       
-      // 管理者は全タスク、それ以外は作成者または担当者が自分のもの
-      const deletedTasks = isAdmin 
-        ? allDeletedTasks
-        : allDeletedTasks.filter(task => 
+      // 管理者は全タスク、それ以外は条件に応じてフィルタリング
+      let deletedTasks: Task[];
+      if (isAdmin) {
+        deletedTasks = allDeletedTasks;
+      } else {
+        // チームモードの場合
+        if (this.taskViewMode === 'team' && this.selectedTeamId) {
+          deletedTasks = [];
+          for (const task of allDeletedTasks) {
+            let shouldInclude = false;
+            // チームタスクの場合、チームメンバー全員が見える
+            if (task.teamId === this.selectedTeamId) {
+              shouldInclude = true;
+            }
+            // チームプロジェクトタスクの場合、プロジェクトのteamIdをチェック
+            else if (task.projectId) {
+              const project = await this.projectService.getProject(task.projectId);
+              if (project && project.teamId === this.selectedTeamId) {
+                shouldInclude = true;
+              }
+            }
+            // 個人タスクの場合、作成者または担当者のみ
+            if (!shouldInclude) {
+              shouldInclude = task.creatorId === user.uid || task.assigneeId === user.uid;
+            }
+            if (shouldInclude) {
+              deletedTasks.push(task);
+            }
+          }
+        } else {
+          // 個人モードの場合、作成者または担当者のみ
+          deletedTasks = allDeletedTasks.filter(task => 
             task.creatorId === user.uid || task.assigneeId === user.uid
           );
+        }
+      }
       
       // チーム名を設定
       for (const task of deletedTasks) {
@@ -228,12 +338,42 @@ export class ArchiveComponent implements OnInit {
         allCompletedTasks = [];
       }
       
-      // 管理者は全タスク、それ以外は作成者または担当者が自分のもの
-      const completedTasks = isAdmin
-        ? allCompletedTasks
-        : allCompletedTasks.filter(task => 
+      // 管理者は全タスク、それ以外は条件に応じてフィルタリング
+      let completedTasks: Task[];
+      if (isAdmin) {
+        completedTasks = allCompletedTasks;
+      } else {
+        // チームモードの場合
+        if (this.taskViewMode === 'team' && this.selectedTeamId) {
+          completedTasks = [];
+          for (const task of allCompletedTasks) {
+            let shouldInclude = false;
+            // チームタスクの場合、チームメンバー全員が見える
+            if (task.teamId === this.selectedTeamId) {
+              shouldInclude = true;
+            }
+            // チームプロジェクトタスクの場合、プロジェクトのteamIdをチェック
+            else if (task.projectId) {
+              const project = await this.projectService.getProject(task.projectId);
+              if (project && project.teamId === this.selectedTeamId) {
+                shouldInclude = true;
+              }
+            }
+            // 個人タスクの場合、作成者または担当者のみ
+            if (!shouldInclude) {
+              shouldInclude = task.creatorId === user.uid || task.assigneeId === user.uid;
+            }
+            if (shouldInclude) {
+              completedTasks.push(task);
+            }
+          }
+        } else {
+          // 個人モードの場合、作成者または担当者のみ
+          completedTasks = allCompletedTasks.filter(task => 
             task.creatorId === user.uid || task.assigneeId === user.uid
           );
+        }
+      }
       
       // チーム名を設定
       for (const task of completedTasks) {
@@ -299,16 +439,22 @@ export class ArchiveComponent implements OnInit {
         this.taskViewMode === 'team' ? this.selectedTeamId : null,
         this.userTeamIds
       );
-      // 削除済みプロジェクトのみをアーカイブに含める
+      // 削除済みプロジェクトと完了したプロジェクトをアーカイブに含める
       const archiveProjects: ArchiveItem[] = allProjects
-        .filter(project => project.isDeleted === true)  // 削除済みのみ
+        .filter(project => project.isDeleted === true || project.status === ProjectStatus.Completed)  // 削除済みまたは完了済み
         .map(project => ({
           type: 'project',
           id: project.id,
           title: project.name,
+          status: project.status,  // プロジェクトのステータスを追加
           isDeleted: project.isDeleted,
           deletedAt: project.deletedAt,
+          completedAt: project.status === ProjectStatus.Completed ? project.dateCheckedAt : undefined,  // 完了日時（dateCheckedAtを使用）
+          assigneeId: project.assigneeId,  // 担当者IDを追加
+          assigneeName: project.assigneeName,  // 担当者名を追加
           ownerId: project.ownerId,
+          teamId: project.teamId,  // チームIDを追加
+          teamName: project.teamName,  // チーム名を追加
           createdAt: project.createdAt
         }));
 
@@ -318,9 +464,21 @@ export class ArchiveComponent implements OnInit {
         return dateB - dateA; // 新しい順
       });
 
+      // 各アイテムに対して完全削除権限をチェックしてフラグを設定
+      for (const item of this.archiveItems) {
+        item.canPermanentlyDelete = await this.canPermanentlyDeleteItem(item);
+      }
+
       // 担当者とプロジェクトのリストを作成
       const assigneeMap = new Map<string, string>();
+      // タスクの担当者を追加
       archiveTasks.forEach(item => {
+        if (item.assigneeId && item.assigneeName) {
+          assigneeMap.set(item.assigneeId, item.assigneeName);
+        }
+      });
+      // プロジェクトの担当者も追加
+      archiveProjects.forEach(item => {
         if (item.assigneeId && item.assigneeName) {
           assigneeMap.set(item.assigneeId, item.assigneeName);
         }
@@ -409,7 +567,17 @@ export class ArchiveComponent implements OnInit {
 
     // プロジェクト（IDで判定に変更）
     if (this.selectedProjectId !== null) {
-      filtered = filtered.filter(item => item.projectId === this.selectedProjectId);
+      filtered = filtered.filter(item => {
+        // タスクの場合：そのプロジェクトに属するタスクを表示
+        if (item.type === 'task') {
+          return item.projectId === this.selectedProjectId;
+        }
+        // プロジェクトの場合：選択されたプロジェクト自体を表示
+        if (item.type === 'project') {
+          return item.id === this.selectedProjectId;
+        }
+        return false;
+      });
     }
 
     // 日付フィルター（有効な場合のみ）
@@ -445,7 +613,23 @@ export class ArchiveComponent implements OnInit {
 
   toggleSortOrder() {
     this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+    this.saveFiltersToStorage();
     this.applyFilters();
+  }
+
+  // 選択されたアイテムの中に完全削除権限があるものがあるかチェック（同期版）
+  get hasPermanentlyDeletePermissionForSelectedItemsSync(): boolean {
+    if (this.selectedItems.size === 0) return false;
+    
+    // 選択されたアイテムの中に1つでも完全削除権限があるものがあればtrue
+    for (const itemId of this.selectedItems) {
+      const item = this.archiveItems.find(i => i.id === itemId);
+      if (item && item.canPermanentlyDelete) {
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   toggleItemSelection(itemId: string) {
@@ -591,6 +775,23 @@ export class ArchiveComponent implements OnInit {
     }
   }
 
+  // 選択されたアイテムの中に完全削除権限があるものがあるかチェック
+  async hasPermanentlyDeletePermissionForSelectedItems(): Promise<boolean> {
+    const user = this.authService.currentUser;
+    if (!user) return false;
+
+    // 選択されたアイテムの中に1つでも完全削除権限があるものがあればtrue
+    for (const itemId of this.selectedItems) {
+      const item = this.archiveItems.find(i => i.id === itemId);
+      if (!item) continue;
+      
+      const canDelete = await this.canPermanentlyDeleteItem(item);
+      if (canDelete) return true;
+    }
+    
+    return false;
+  }
+
   async permanentlyDeleteSelectedItems() {
     if (this.selectedItems.size === 0) {
       alert('削除する項目が選択されていません');
@@ -608,29 +809,43 @@ export class ArchiveComponent implements OnInit {
         return;
       }
 
-      const userDoc = await this.authService.getUser(user.uid);
-      if (userDoc?.role !== 'admin') {
-        alert('完全削除は管理者のみ可能です');
-        return;
-      }
-
       const { doc, deleteDoc } = await import('firebase/firestore');
       const { db } = await import('../../../firebase-config');
 
       const itemIds = Array.from(this.selectedItems);
+      let successCount = 0;
+      let failCount = 0;
+
       for (const itemId of itemIds) {
         const item = this.archiveItems.find(i => i.id === itemId);
         if (!item) continue;
 
-        if (item.type === 'task') {
-          await deleteDoc(doc(db, 'tasks', itemId));
-        } else {
-          await deleteDoc(doc(db, 'projects', itemId));
+        // 権限チェック
+        const canDelete = await this.canPermanentlyDeleteItem(item);
+        if (!canDelete) {
+          failCount++;
+          continue;
+        }
+
+        try {
+          if (item.type === 'task') {
+            await deleteDoc(doc(db, 'tasks', itemId));
+          } else {
+            await deleteDoc(doc(db, 'projects', itemId));
+          }
+          successCount++;
+        } catch (error) {
+          console.error(`Error deleting item ${itemId}:`, error);
+          failCount++;
         }
       }
 
       this.selectedItems.clear();
-      alert('完全に削除しました');
+      if (failCount > 0) {
+        alert(`${successCount}件を完全削除しました。${failCount}件は権限不足のため削除できませんでした。`);
+      } else {
+        alert(`${successCount}件を完全削除しました`);
+      }
       await this.loadArchiveData();
     } catch (error: any) {
       console.error('Error permanently deleting items:', error);
@@ -640,6 +855,7 @@ export class ArchiveComponent implements OnInit {
 
   onFilterChange() {
     this.applyFilters();
+    this.saveFiltersToStorage();
   }
 
   async restoreItem(item: ArchiveItem) {
@@ -884,6 +1100,50 @@ export class ArchiveComponent implements OnInit {
     }
   }
 
+  // 完全削除権限をチェック
+  async canPermanentlyDeleteItem(item: ArchiveItem): Promise<boolean> {
+    const user = this.authService.currentUser;
+    if (!user) return false;
+
+    const userDoc = await this.authService.getUser(user.uid);
+    const isAdmin = userDoc?.role === 'admin';
+
+    // 管理者は常に完全削除可能
+    if (isAdmin) return true;
+
+    if (item.type === 'task') {
+      // タスクの場合：task.service.tsのcanPermanentlyDeleteTaskと同じロジック
+      // 個人タスクの場合、作成者のみ完全削除可能
+      if (!item.teamId) {
+        return item.creatorId === user.uid;
+      }
+      
+      // チームタスクの場合、チーム管理者のみ完全削除可能
+      if (item.teamId) {
+        const canEdit = await this.teamService.canEditTeam(item.teamId, user.uid);
+        if (canEdit) return true;
+      }
+      
+      // プロジェクトタスクの場合、プロジェクトオーナーも完全削除可能
+      if (item.projectId) {
+        const project = await this.projectService.getProject(item.projectId);
+        if (project && project.ownerId === user.uid) return true;
+      }
+    } else {
+      // プロジェクトの場合
+      // チーム配下のプロジェクト（teamIdがある）: チーム管理者のみ完全削除可能
+      if (item.teamId) {
+        const canEdit = await this.teamService.canEditTeam(item.teamId, user.uid);
+        if (canEdit) return true;
+      }
+      
+      // 個人プロジェクト（teamIdがない）: 作成者（オーナー）のみ完全削除可能
+      return item.ownerId === user.uid;
+    }
+
+    return false;
+  }
+
   async permanentlyDeleteItem(item: ArchiveItem) {
     if (!confirm(`「${item.title}」を完全に削除しますか？\nこの操作は元に戻せません。`)) {
       return;
@@ -896,10 +1156,10 @@ export class ArchiveComponent implements OnInit {
         return;
       }
 
-      // 権限チェック（管理者のみ可能）
-      const userDoc = await this.authService.getUser(user.uid);
-      if (userDoc?.role !== 'admin') {
-        alert('完全削除は管理者のみ可能です');
+      // 権限チェック
+      const canDelete = await this.canPermanentlyDeleteItem(item);
+      if (!canDelete) {
+        alert('完全削除する権限がありません');
         return;
       }
 
@@ -941,7 +1201,7 @@ export class ArchiveComponent implements OnInit {
     });
   }
 
-  getStatusLabel(status?: TaskStatus): string {
+  getStatusLabel(status?: TaskStatus | ProjectStatus): string {
     if (!status) return '-';
     const statusMap: { [key: string]: string } = {
       'not_started': '未着手',
@@ -953,7 +1213,11 @@ export class ArchiveComponent implements OnInit {
   }
 
   goBack() {
-    this.router.navigate(['/home']);
+    if (window.history.length > 1) {
+      this.location.back();
+    } else {
+      this.router.navigate(['/home']);
+    }
   }
 
   onProjectNameInput() {
@@ -968,6 +1232,7 @@ export class ArchiveComponent implements OnInit {
       );
       this.showProjectSuggestions = this.filteredProjectSuggestions.length > 0;
     }
+    this.saveFiltersToStorage();
     this.applyFilters();
   }
 
@@ -980,6 +1245,7 @@ export class ArchiveComponent implements OnInit {
     this.projectNameInput = project.name;
     this.selectedProjectId = project.id;
     this.showProjectSuggestions = false;
+    this.saveFiltersToStorage();
     this.applyFilters();
   }
 
@@ -988,6 +1254,7 @@ export class ArchiveComponent implements OnInit {
     this.selectedProjectId = null;
     this.filteredProjectSuggestions = [];
     this.showProjectSuggestions = false;
+    this.saveFiltersToStorage();
     this.applyFilters();
   }
 

@@ -1,6 +1,6 @@
 <div class="home-container">
   <header class="header">
-    <h1>タスク管理アプリ</h1>
+    <h1>🏠ホーム</h1>
     <div class="header-actions">
       <button 
         *ngIf="showNextTasks"
@@ -29,7 +29,12 @@
           {{ category.name }}
         </h3>
         <div class="task-list" *ngIf="isCategoryExpanded('today-' + i)">
-          <div *ngFor="let task of category.tasks" class="task-card" (click)="viewTaskDetail(task.id)">
+          <div *ngFor="let task of category.tasks" 
+               class="task-card" 
+               [class.overdue-start-date]="isOverdueStartDate(task)"
+               [class.overdue-end-date]="isOverdueEndDate(task)"
+               [title]="isOverdueStartDate(task) ? '開始日が過ぎています' : (isOverdueEndDate(task) ? '期限が過ぎています' : '')"
+               (click)="viewTaskDetail(task.id)">
             <h4>{{ task.title }}</h4>
             <p *ngIf="task.teamName" class="team-name">チーム: {{ task.teamName }}</p>
             <p *ngIf="task.description">{{ task.description }}</p>
@@ -50,11 +55,11 @@
       <div class="section-header">
         <h2>今週のタスク</h2>
         <div class="week-view-controls">
-          表示期間：{{getWeekViewLabel()}}
           <button class="week-view-toggle" (click)="toggleWeekViewMode()" 
             [class.active]="weekViewMode === 'calendar'">
             期間変更
           </button>
+          表示期間：{{getWeekViewLabel()}}
         </div>
       </div>
       <div *ngIf="isLoading" class="loading">読み込み中...</div>
@@ -70,7 +75,12 @@
           {{ category.name }}
         </h3>
         <div class="task-list" *ngIf="isCategoryExpanded('week-' + i)">
-          <div *ngFor="let task of category.tasks" class="task-card" (click)="viewTaskDetail(task.id)">
+          <div *ngFor="let task of category.tasks" 
+               class="task-card"
+               [class.overdue-start-date]="isOverdueStartDate(task)"
+               [class.overdue-end-date]="isOverdueEndDate(task)"
+               [title]="isOverdueStartDate(task) ? '開始日が過ぎています' : (isOverdueEndDate(task) ? '期限が過ぎています' : '')"
+               (click)="viewTaskDetail(task.id)">
             <h4>{{ task.title }}</h4>
             <p *ngIf="task.teamName" class="team-name">チーム: {{ task.teamName }}</p>
             <p *ngIf="task.description">{{ task.description }}</p>

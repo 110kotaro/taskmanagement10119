@@ -15,23 +15,17 @@ const firebaseConfig = {
 
 // Firebaseを初期化
 firebase.initializeApp(firebaseConfig);
+console.log('[firebase-messaging-sw.js] Firebase initialized');
 
 // Messagingインスタンスを取得
 const messaging = firebase.messaging();
+console.log('[firebase-messaging-sw.js] Messaging instance created');
 
 // バックグラウンドメッセージのハンドラー
+// Firebase Messaging SDKが自動的に通知を表示するため、ここでは何もしない
 messaging.onBackgroundMessage((payload) => {
-  console.log('[firebase-messaging-sw.js] Received background message ', payload);
-  
-  const notificationTitle = payload.notification?.title || 'タスクリマインダー';
-  const notificationOptions = {
-    body: payload.notification?.body || payload.data?.message || '',
-    icon: '/favicon.ico',
-    badge: '/favicon.ico',
-    data: payload.data || {}
-  };
-
-  return self.registration.showNotification(notificationTitle, notificationOptions);
+  console.log('[firebase-messaging-sw.js] Received background message', payload);
+  // SDKが自動的に通知を表示するため、手動で通知を表示しない
 });
 
 // 通知クリック時の処理

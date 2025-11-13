@@ -30,10 +30,18 @@ export class StatusChangeConfirmationComponent {
       await this.taskService.updateTask(this.task.id, {
         status: TaskStatus.InProgress
       });
-      // dateCheckedAtは更新しない（終了日チェックも実行するため）
+      // dateCheckedAtを更新（開始日チェックの通知を止める）
+      // ステータス変更時にdateCheckedAtがリセットされるので、終了日チェックも正しく動作する
+      await this.taskService.markTaskDateChecked(this.task.id);
       this.actionSelected.emit(action);
       this.closed.emit();
     } else if (action === 'change_to_completed') {
+      // 確認ダイアログを表示
+      if (!confirm('このタスクを完了にしますか？')) {
+        // キャンセルされた場合は処理を中断
+        return;
+      }
+      
       // ステータスを完了に変更
       const { Timestamp } = await import('firebase/firestore');
       await this.taskService.updateTask(this.task.id, {

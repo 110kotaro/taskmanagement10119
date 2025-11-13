@@ -7,14 +7,14 @@
 .loading {
   text-align: center;
   padding: 2rem;
-  color: #999;
+  color: var(--color-text-secondary);
 }
 
 .task-detail-card {
-  background: white;
+  background: var(--color-surface);
   padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
 }
 
 .header {
@@ -23,7 +23,8 @@
   align-items: center;
   margin-bottom: 2rem;
   padding-bottom: 1rem;
-  border-bottom: 2px solid #e0e0e0;
+  border-bottom: 2px solid var(--color-border);
+  gap: 1rem;
 }
 
 .header-actions {
@@ -33,36 +34,38 @@
 
 .back-btn {
   padding: 0.5rem 1rem;
-  background: #667eea;
-  color: white;
-  border: none;
-  border-radius: 6px;
+  background: rgba(102, 126, 234, 0.1);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--border-radius);
   cursor: pointer;
+  font-size: var(--font-size-base);
+  transition: background 0.2s;
 }
 
 .back-btn:hover {
-  background: #5568d3;
+  background: rgba(102, 126, 234, 0.2);
 }
 
 .edit-btn, .duplicate-btn, .delete-btn {
   padding: 0.5rem 1.5rem;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   cursor: pointer;
   font-weight: 600;
 }
 
 .edit-btn {
-  background: #667eea;
+  background: var(--color-primary);
   color: white;
 }
 
 .edit-btn:hover {
-  background: #5568d3;
+  background: var(--color-primary-dark);
 }
 
 .duplicate-btn {
-  background: #28a745;
+  background: var(--color-success);
   color: white;
 }
 
@@ -71,7 +74,7 @@
 }
 
 .delete-btn {
-  background: #e74c3c;
+  background: var(--color-error);
   color: white;
 }
 
@@ -81,7 +84,7 @@
 
 h1 {
   margin: 0 0 1.5rem 0;
-  color: #333;
+  color: var(--color-text);
 }
 
 .task-info {
@@ -93,12 +96,19 @@ h1 {
 .info-item {
   display: flex;
   gap: 1rem;
-  align-items: start;
+  align-items: flex-start;
+  color: var(--color-text);
+  margin:0;
+}
+
+.info-item p {
+  margin: 0;
+  flex: 1;
 }
 
 .label {
   font-weight: 600;
-  color: #666;
+  color: var(--color-text-secondary);
   min-width: 100px;
 }
 
@@ -147,13 +157,30 @@ h1 {
 /* フォームスタイル */
 .form-group {
   margin-bottom: 1.5rem;
+  color: var(--color-text-secondary);
 }
 
 .form-group label {
   display: block;
   margin-bottom: 0.5rem;
-  color: #555;
+  color: var(--color-text-secondary);
   font-weight: 500;
+}
+
+/* チェックボックスを含むlabelのスタイル */
+.form-group label input[type="checkbox"] {
+  width: auto;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+/* チェックボックスを含むlabelをflexboxで横並びにする */
+.form-group label:has(input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0;
 }
 
 .form-group input,
@@ -161,16 +188,18 @@ h1 {
 .form-group select {
   width: 100%;
   padding: 0.75rem;
-  border: 2px solid #e0e0e0;
-  border-radius: 6px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
   font-size: 1rem;
+  background: var(--color-background);
+  color: var(--color-text);
 }
 
 .form-group input:focus,
 .form-group textarea:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--color-primary);
 }
 
 .form-actions {
@@ -189,8 +218,8 @@ h1 {
 }
 
 .cancel-btn {
-  background: #e0e0e0;
-  color: #333;
+  background: var(--color-border);
+  color: var(--color-text);
 }
 
 .cancel-btn:hover {
@@ -198,12 +227,12 @@ h1 {
 }
 
 .save-btn {
-  background: #667eea;
+  background: var(--color-primary);
   color: white;
 }
 
 .save-btn:hover:not(:disabled) {
-  background: #5568d3;
+  background: var(--color-primary-dark);
 }
 
 .save-btn:disabled {
@@ -214,13 +243,13 @@ h1 {
 .timer-section {
   margin-top: 2rem;
   padding-top: 2rem;
-  border-top: 2px solid #e0e0e0;
+  border-top: 2px solid var(--color-border);
 }
 
 .timer-btn {
   width: 100%;
   padding: 1rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--gradient-primary);
   color: white;
   border: none;
   border-radius: 8px;
@@ -232,20 +261,20 @@ h1 {
 
 .timer-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: var(--shadow-lg);
 }
 
 /* サブタスクセクション */
 .subtasks-section {
   margin-top: 2rem;
   padding: 1.5rem;
-  background: #f9f9f9;
+  background: var(--color-background);
   border-radius: 8px;
 }
 
 .subtasks-section h3 {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: var(--color-text);
 }
 
 .progress-info {
@@ -255,13 +284,14 @@ h1 {
   flex-wrap: wrap;
   margin-bottom: 1rem;
   padding: 0.5rem;
-  background: white;
-  border-radius: 6px;
+  background: var(--color-surface);
+  border-radius: var(--border-radius);
   font-weight: 600;
+  color: var(--color-text);
 }
 
 .progress-percentage {
-  color: #667eea;
+  color: var(--color-primary);
 }
 
 .progress-manual-control {
@@ -274,19 +304,19 @@ h1 {
 .progress-input {
   width: 60px;
   padding: 0.25rem 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   font-size: 0.9rem;
 }
 
 .progress-input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--color-primary);
 }
 
 .percent-symbol {
   font-size: 0.9rem;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .manual-progress-indicator {
@@ -294,7 +324,7 @@ h1 {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
-  color: #ff9800;
+  color: var(--color-warning);
 }
 
 .manual-label {
@@ -304,7 +334,7 @@ h1 {
 .resume-auto-btn {
   padding: 0.25rem 0.75rem;
   font-size: 0.8rem;
-  background-color: #4caf50;
+  background-color: var(--color-success);
   color: white;
   border: none;
   border-radius: 4px;
@@ -320,7 +350,7 @@ h1 {
 .manual-calc-btn {
   padding: 0.5rem 1rem;
   font-size: 0.9rem;
-  background-color: #667eea;
+  background-color: var(--color-primary);
   color: white;
   border: none;
   border-radius: 4px;
@@ -329,14 +359,14 @@ h1 {
 }
 
 .manual-calc-btn:hover {
-  background-color: #5568d3;
+  background-color: var(--color-primary-dark);
 }
 
 /* 決定ボタン */
 .confirm-btn {
   padding: 0.25rem 0.75rem;
   font-size: 0.9rem;
-  background-color: #4caf50;
+  background-color: var(--color-success);
   color: white;
   border: none;
   border-radius: 4px;
@@ -352,7 +382,7 @@ h1 {
 .cancel-manual-btn {
   padding: 0.25rem 0.75rem;
   font-size: 0.9rem;
-  background-color: #999;
+  background-color: var(--color-text-secondary);
   color: white;
   border: none;
   border-radius: 4px;
@@ -375,14 +405,14 @@ h1 {
   align-items: center;
   padding: 0.75rem;
   margin-bottom: 0.5rem;
-  background: white;
-  border-radius: 6px;
+  background: var(--color-surface);
+  border-radius: var(--border-radius);
   gap: 1rem;
   transition: background 0.2s;
 }
 
 .subtask-item:hover {
-  background: #f5f5f5;
+  background: var(--color-background);
 }
 
 .subtask-item.completed {
@@ -397,7 +427,7 @@ h1 {
 
 .subtask-title {
   flex: 1;
-  color: #333;
+  color: var(--color-text);
 }
 
 .subtask-item.completed .subtask-title {
@@ -406,7 +436,7 @@ h1 {
 
 .delete-subtask-btn {
   padding: 0.25rem 0.75rem;
-  background: #f44336;
+  background: var(--color-error);
   color: white;
   border: none;
   border-radius: 4px;
@@ -426,35 +456,37 @@ h1 {
 .add-subtask input {
   flex: 1;
   padding: 0.75rem;
-  border: 2px solid #e0e0e0;
-  border-radius: 6px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
   font-size: 1rem;
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 .add-subtask input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--color-primary);
 }
 
 .add-subtask button {
   padding: 0.75rem 1.5rem;
-  background: #667eea;
+  background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   cursor: pointer;
   font-weight: 600;
 }
 
 .add-subtask button:hover {
-  background: #5568d3;
+  background: var(--color-primary-dark);
 }
 
 /* コメントセクション */
 .comments-section {
   margin-top: 2rem;
   padding-top: 2rem;
-  border-top: 2px solid #e0e0e0;
+  border-top: 2px solid var(--color-border);
 }
 
 .comments-header {
@@ -466,22 +498,29 @@ h1 {
 
 .comments-header h3 {
   margin: 0;
-  color: #333;
+  color: var(--color-text);
+}
+
+.comment-count {
+  font-size: 0.9em;
+  color: var(--color-text-secondary);
+  font-weight: normal;
+  margin-left: 4px;
 }
 
 .toggle-comments-btn {
   padding: 0.5rem 1rem;
-  background: #667eea;
+  background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   cursor: pointer;
   font-size: 0.875rem;
   font-weight: 500;
 }
 
 .toggle-comments-btn:hover {
-  background: #5568d3;
+  background: var(--color-primary-dark);
 }
 
 .comments-content {
@@ -495,38 +534,89 @@ h1 {
   flex-direction: column;
   gap: 0.75rem;
   padding: 1rem;
-  background: #f9f9f9;
+  background: var(--color-background);
   border-radius: 8px;
+}
+
+.comment-input-wrapper {
+  position: relative;
+  width: 100%;
 }
 
 .add-comment textarea {
   width: 100%;
   padding: 0.75rem;
-  border: 2px solid #e0e0e0;
-  border-radius: 6px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
   font-size: 1rem;
   font-family: inherit;
   resize: vertical;
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 .add-comment textarea:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--color-primary);
+}
+
+/* メンション候補リスト */
+.mention-suggestions {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-lg);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  margin-bottom: 4px;
+}
+
+.mention-suggestion-item {
+  padding: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.mention-suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.mention-suggestion-item:hover {
+  background: var(--color-background);
+}
+
+.mention-name {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: 0.95rem;
+}
+
+.mention-email {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
 }
 
 .add-comment button {
   align-self: flex-end;
   padding: 0.5rem 1.5rem;
-  background: #667eea;
+  background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   cursor: pointer;
   font-weight: 600;
 }
 
 .add-comment button:hover {
-  background: #5568d3;
+  background: var(--color-primary-dark);
 }
 
 .comments-list {
@@ -537,9 +627,16 @@ h1 {
 
 .comment-item {
   padding: 1rem;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.comment-item.unread-comment {
+  background: rgba(255, 193, 7, 0.1);
+  border-color: rgba(255, 193, 7, 0.3);
+  border-left: 4px solid var(--color-warning);
 }
 
 .comment-header {
@@ -548,21 +645,37 @@ h1 {
   align-items: center;
   margin-bottom: 0.5rem;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border);
+  gap: 0.5rem;
 }
 
 .comment-author {
   font-weight: 600;
-  color: #333;
+  color: var(--color-text);
 }
 
 .comment-date {
   font-size: 0.875rem;
-  color: #666;
+  color: var(--color-text-secondary);
+}
+
+.unread-badge {
+  background: var(--color-warning);
+  color: white;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.unread-comment-count {
+  color: var(--color-warning);
+  font-weight: 600;
 }
 
 .comment-content {
-  color: #555;
+  color: var(--color-text-secondary);
   white-space: pre-wrap;
   word-wrap: break-word;
 }
@@ -570,8 +683,8 @@ h1 {
 .no-comments {
   padding: 2rem;
   text-align: center;
-  color: #999;
-  background: #f9f9f9;
+  color: var(--color-text-secondary);
+  background: var(--color-background);
   border-radius: 8px;
 }
 
@@ -579,12 +692,12 @@ h1 {
 .files-section {
   margin-top: 2rem;
   padding-top: 2rem;
-  border-top: 2px solid #e0e0e0;
+  border-top: 2px solid var(--color-border);
 }
 
 .files-section h3 {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: var(--color-text);
 }
 
 .file-upload {
@@ -592,17 +705,17 @@ h1 {
   flex-direction: column;
   gap: 0.75rem;
   padding: 1rem;
-  background: #f9f9f9;
+  background: var(--color-background);
   border-radius: 8px;
   margin-bottom: 1rem;
 }
 
 .file-input-label {
   padding: 0.5rem 1rem;
-  background: #667eea;
+  background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   cursor: pointer;
   display: inline-block;
   text-align: center;
@@ -611,22 +724,22 @@ h1 {
 }
 
 .file-input-label:hover {
-  background: #5568d3;
+  background: var(--color-primary-dark);
 }
 
 .upload-btn {
   padding: 0.5rem 1.5rem;
-  background: #667eea;
+  background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   cursor: pointer;
   font-weight: 600;
   align-self: flex-start;
 }
 
 .upload-btn:hover:not(:disabled) {
-  background: #5568d3;
+  background: var(--color-primary-dark);
 }
 
 .upload-btn:disabled {
@@ -636,7 +749,7 @@ h1 {
 
 .selected-files {
   font-size: 0.875rem;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .files-list {
@@ -650,14 +763,14 @@ h1 {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem;
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
 }
 
 .file-name {
   flex: 1;
-  color: #333;
+  color: var(--color-text);
   font-weight: 500;
 }
 
@@ -675,16 +788,16 @@ h1 {
 }
 
 .download-btn {
-  background: #667eea;
+  background: var(--color-primary);
   color: white;
 }
 
 .download-btn:hover {
-  background: #5568d3;
+  background: var(--color-primary-dark);
 }
 
 .delete-file-btn {
-  background: #f44336;
+  background: var(--color-error);
   color: white;
 }
 
@@ -695,8 +808,8 @@ h1 {
 .no-files {
   padding: 2rem;
   text-align: center;
-  color: #999;
-  background: #f9f9f9;
+  color: var(--color-text-secondary);
+  background: var(--color-background);
   border-radius: 8px;
 }
 
@@ -705,7 +818,7 @@ h1 {
   margin-left: 0.5rem;
   padding: 0.25rem 0.75rem;
   font-size: 0.9rem;
-  background-color: #667eea;
+  background-color: var(--color-primary);
   color: white;
   border: none;
   border-radius: 4px;
@@ -714,26 +827,26 @@ h1 {
 }
 
 .details-btn:hover {
-  background-color: #5568d3;
+  background-color: var(--color-primary-dark);
 }
 
 .work-time-details {
   margin-top: 1rem;
   padding: 1.5rem;
-  background: #f9f9f9;
+  background: var(--color-background);
   border-radius: 8px;
 }
 
 .work-time-details h4 {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: var(--color-text);
 }
 
 .work-sessions-table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 1rem;
-  background: white;
+  background: var(--color-surface);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -742,21 +855,21 @@ h1 {
 .work-sessions-table td {
   padding: 0.75rem;
   text-align: left;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .work-sessions-table th {
-  background-color: #667eea;
+  background-color: var(--color-primary);
   color: white;
   font-weight: 600;
 }
 
 .work-sessions-table tr.editing {
-  background-color: #fff3e0;
+  background-color: rgba(255, 193, 7, 0.1);
 }
 
 .work-sessions-table tr.total-row {
-  background-color: #e8e8e8;
+  background-color: var(--color-background);
   font-weight: bold;
 }
 
@@ -776,7 +889,7 @@ h1 {
 }
 
 .edit-session-btn {
-  background-color: #4caf50;
+  background-color: var(--color-success);
   color: white;
 }
 
@@ -785,7 +898,7 @@ h1 {
 }
 
 .view-log-btn {
-  background-color: #2196f3;
+  background-color: var(--color-info);
   color: white;
 }
 
@@ -796,7 +909,7 @@ h1 {
 .work-sessions-table input[type="datetime-local"],
 .work-sessions-table input[type="number"] {
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   font-size: 0.9rem;
   width: 100%;
@@ -805,7 +918,7 @@ h1 {
 .work-sessions-table input[type="datetime-local"]:focus,
 .work-sessions-table input[type="number"]:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--color-primary);
 }
 
 /* 変更ログモーダル */
@@ -823,18 +936,18 @@ h1 {
 }
 
 .modal-content {
-  background: white;
+  background: var(--color-surface);
   padding: 2rem;
   border-radius: 8px;
   max-width: 800px;
   max-height: 80vh;
   overflow-y: auto;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-lg);
 }
 
 .modal-content h4 {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: var(--color-text);
 }
 
 .change-log-table {
@@ -847,43 +960,43 @@ h1 {
 .change-log-table td {
   padding: 0.75rem;
   text-align: left;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .change-log-table th {
-  background-color: #667eea;
+  background-color: var(--color-primary);
   color: white;
   font-weight: 600;
 }
 
 .change-log-table tr.no-logs {
   text-align: center;
-  color: #999;
+  color: var(--color-text-secondary);
   padding: 2rem;
 }
 
 .close-modal-btn {
   padding: 0.5rem 1.5rem;
-  background: #667eea;
+  background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   cursor: pointer;
   font-weight: 600;
   transition: background-color 0.2s;
 }
 
 .close-modal-btn:hover {
-  background: #5568d3;
+  background: var(--color-primary-dark);
 }
 
 .add-session-row {
-  background-color: #f5f5f5;
+  background-color: var(--color-background);
 }
 
 .add-session-btn {
   padding: 0.5rem 1rem;
-  background-color: #667eea;
+  background-color: var(--color-primary);
   color: white;
   border: none;
   border-radius: 4px;
@@ -893,20 +1006,60 @@ h1 {
 }
 
 .add-session-btn:hover {
-  background-color: #5568d3;
+  background-color: var(--color-primary-dark);
 }
 
 .work-sessions-table tr.adding {
-  background-color: #e8f5e9;
+  background-color: rgba(76, 175, 80, 0.1);
 }
 
 .no-sessions {
   padding: 2rem;
   text-align: center;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .add-session-form {
-  margin-top: 1rem;
-}
+    margin-top: 1rem;
+  }
 
+  /* クリック可能な読み取り専用フィールド */
+  .readonly-field.clickable {
+    cursor: pointer;
+    padding: 8px 12px;
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+    -webkit-user-select: none;
+    pointer-events: auto;
+  }
+
+  .readonly-field.clickable:hover {
+    background: rgba(33, 150, 243, 0.1);
+    border-color: var(--color-info);
+    color: var(--color-info);
+  }
+
+  .readonly-field.clickable .link-hint {
+    font-size: 0.875rem;
+    color: var(--color-info);
+    margin-left: 8px;
+    font-weight: 500;
+  }
+
+  .readonly-field.clickable:hover .link-hint {
+    text-decoration: underline;
+  }
+
+  .help-text {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    margin-top: 4px;
+  }
+  
+ 

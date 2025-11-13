@@ -52,19 +52,40 @@ html, body {
 
 :root[data-theme="dark"],
 [data-theme="dark"] {
-  --color-primary: #7c8ef5;
-  --color-primary-dark: #6a7ae4;
+  --color-primary: #4a5bd4;
+  --color-primary-dark: #3945bd;
   --color-secondary: #8b5fb8;
   --color-background: #1a1a1a;
   --color-surface: #2d2d2d;
   --color-text: #e0e0e0;
   --color-text-secondary: #a0a0a0;
-  --color-border: #404040;
+  --color-border: #535353;
   --color-error: #f56565;
   --color-success: #48bb78;
   --color-warning: #ed8936;
   --color-info: #4299e1;
+
+   /* シャドウ */
+   --shadow-sm: 0 2px 4px rgba(86, 60, 190, 0.2);
+   --shadow-md: 0 2px 8px rgba(86, 60, 190, 0.2);
+   --shadow-lg: 0 4px 16px rgba(86, 60, 190, 0.25);
   
-  --gradient-primary: linear-gradient(135deg, #7c8ef5 0%, #8b5fb8 100%);
-  --gradient-background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  --gradient-primary: linear-gradient(135deg, #4a5bd4 0%, #542a84 100%);
+  --gradient-background: linear-gradient(135deg, #1a1d24 0%, #282e3a 100%);
+  /*--gradient-primary: linear-gradient(135deg, #7c8ef5 0%, #8b5fb8 100%);
+  --gradient-background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);*/
+}
+
+/* 日付・時間入力のカレンダー/時計アイコンのテーマ対応 */
+/* ライトテーマ（デフォルト）はブラウザのデフォルトを使用 */
+
+/* ダークテーマでは白にする */
+:root[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+:root[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator,
+[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator,
+:root[data-theme="dark"] .date-input::-webkit-calendar-picker-indicator,
+[data-theme="dark"] .date-input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
 }

@@ -33,16 +33,20 @@
           <span class="status-badge status-{{ task.status }}">{{ getStatusLabel(task.status) }}</span>
         </div>
         <div class="info-item">
-          <span class="label">優先度:</span>
+          <span class="label">重要度:</span>
           <span class="priority-badge priority-{{ task.priority }}">{{ getPriorityLabel(task.priority) }}</span>
         </div>
         <div class="info-item">
-          <span class="label">開始日:</span>
-          <span>{{ formatDate(task.startDate) }}</span>
+          <span class="label">タスクタイプ:</span>
+          <span>{{ getTaskTypeLabel(task.taskType || 'normal') }}</span>
         </div>
         <div class="info-item">
-          <span class="label">期限:</span>
-          <span>{{ formatDate(task.endDate) }}</span>
+          <span class="label">開始日時:</span>
+          <span>{{ formatDateWithTime(task.startDate) }}</span>
+        </div>
+        <div class="info-item">
+          <span class="label">期限日時:</span>
+          <span>{{ formatDateWithTime(task.endDate) }}</span>
         </div>
         <div class="info-item" *ngIf="task.description">
           <span class="label">説明:</span>
@@ -289,7 +293,11 @@
       <!-- コメントセクション -->
       <div class="comments-section">
         <div class="comments-header">
-          <h3>コメント</h3>
+          <h3>コメント
+            <span class="comment-count">（{{ task.comments?.length || 0 }}件</span>
+            <span class="unread-comment-count" *ngIf="unreadCommentCount > 0"> / 未読{{ unreadCommentCount }}件</span>
+            <span class="comment-count">）</span>
+          </h3>
           <button class="toggle-comments-btn" (click)="toggleCommentsTab()">
             {{ showCommentsTab ? '閉じる' : '開く' }}
           </button>
@@ -298,19 +306,37 @@
         <div *ngIf="showCommentsTab" class="comments-content">
           <!-- コメント追加フォーム -->
           <div class="add-comment">
-            <textarea 
-              [(ngModel)]="newCommentContent"
-              placeholder="コメントを追加..."
-              rows="3"></textarea>
+            <div class="comment-input-wrapper">
+              <textarea 
+                #commentTextarea
+                [(ngModel)]="newCommentContent"
+                (input)="onCommentInput($event)"
+                (blur)="hideMentionSuggestions()"
+                placeholder="コメントを追加...（@でメンション）"
+                rows="3"></textarea>
+              <!-- メンション候補リスト -->
+              <div *ngIf="showMentionSuggestions && mentionSuggestions.length > 0" class="mention-suggestions">
+                <div 
+                  *ngFor="let user of mentionSuggestions" 
+                  class="mention-suggestion-item"
+                  (mousedown)="selectMention(user); $event.preventDefault()">
+                  <span class="mention-name">{{ user.name }}</span>
+                  <span class="mention-email">{{ user.email }}</span>
+                </div>
+              </div>
+            </div>
             <button (click)="addComment()">コメント追加</button>
           </div>
 
           <!-- コメント一覧 -->
           <div class="comments-list" *ngIf="task.comments && task.comments.length > 0">
-            <div *ngFor="let comment of sortedComments" class="comment-item">
+            <div *ngFor="let comment of sortedComments" 
+                 class="comment-item" 
+                 [class.unread-comment]="isCommentUnread(comment.id)">
               <div class="comment-header">
                 <span class="comment-author">{{ comment.userName }}</span>
                 <span class="comment-date">{{ formatDateTime(comment.createdAt) }}</span>
+                <span class="unread-badge" *ngIf="isCommentUnread(comment.id)">未読</span>
               </div>
               <div class="comment-content">{{ comment.content }}</div>
             </div>
@@ -405,12 +431,23 @@
         </div>
 
         <div class="form-group">
-          <label for="priority">優先度</label>
+          <label for="priority">重要度</label>
           <select id="priority" formControlName="priority">
             <option value="important">重要</option>
             <option value="normal">普通</option>
             <option value="low">低め</option>
             <option value="none">なし</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="taskType">タスクタイプ</label>
+          <select id="taskType" formControlName="taskType">
+            <option value="normal">通常</option>
+            <option value="meeting">会議</option>
+            <option value="regular">定期</option>
+            <option value="project">プロジェクト</option>
+            <option value="other">その他</option>
           </select>
         </div>
 
@@ -442,9 +479,24 @@
           <label for="assigneeId">担当者（オプション）</label>
           <select id="assigneeId" formControlName="assigneeId">
             <option value="">担当者なし</option>
+            <!-- プロジェクトタスクの場合：プロジェクトメンバーのみ -->
+            <ng-container *ngIf="task.projectId && projectMembers.length > 0">
+              <option *ngFor="let member of projectMembers" [value]="member.userId">
+                {{ member.userName || member.userEmail }}
+              </option>
+            </ng-container>
+            <!-- チームタスク（プロジェクト未所属）の場合：チームメンバーのみ -->
+            <ng-container *ngIf="task.teamId && !task.projectId && teamMembers.length > 0">
+             <option *ngFor="let member of teamMembers" [value]="member.userId">
+              {{ member.userName || member.userEmail }}
+             </option>
+            </ng-container>
+            <!--個人タスクの場合-->
+            <ng-container *ngIf="!task.teamId">
             <option *ngFor="let user of users" [value]="user.id">
               {{ user.displayName || user.email }}
             </option>
+          </ng-container>
           </select>
         </div>
 
@@ -456,6 +508,40 @@
               {{ project.name }}
             </option>
           </select>
+        </div>
+
+        <!-- 繰り返し設定（親タスクの場合） -->
+        <div class="form-group" *ngIf="!isChildTask">
+          <label for="recurrence">繰り返し</label>
+          <select id="recurrence" formControlName="recurrence">
+            <option [value]="'none'">繰り返さない</option>
+            <option [value]="'daily'">毎日</option>
+            <option [value]="'weekly'">毎週</option>
+            <option [value]="'biweekly'">隔週</option>
+            <option [value]="'monthly'">毎月</option>
+            <option [value]="'yearly'">毎年</option>
+          </select>
+        </div>
+
+        <div class="form-group" *ngIf="!isChildTask && editForm.get('recurrence')?.value !== 'none'">
+          <label for="recurrenceEndDate">繰り返し終了日（任意）</label>
+          <input type="date" id="recurrenceEndDate" formControlName="recurrenceEndDate">
+        </div>
+
+        <!-- 子タスクの場合、繰り返し設定を表示のみ（クリックで親タスクに遷移） -->
+        <div class="form-group" *ngIf="isChildTask">
+          <label>繰り返し</label>
+          <div class="readonly-field clickable" (click)="navigateToParentTask($event)" title="親タスクで繰り返し設定を変更">
+            <span *ngIf="task.recurrence && task.recurrence !== 'none'">
+              {{ getRecurrenceLabel(task.recurrence) }}
+              <span *ngIf="task.recurrenceEndDate">
+                （終了日: {{ formatDate(task.recurrenceEndDate) }}）
+              </span>
+            </span>
+            <span *ngIf="!task.recurrence || task.recurrence === 'none'">繰り返さない</span>
+            <span class="link-hint">→ 親タスクで変更</span>
+          </div>
+          <p class="help-text">繰り返し設定は親タスクで変更してください。クリックで親タスクの詳細ページに移動します。</p>
         </div>
 
         <div class="form-group">
@@ -526,7 +612,7 @@
 
         <div class="form-actions">
           <button type="button" class="cancel-btn" (click)="toggleEdit()">キャンセル</button>
-          <button type="submit" class="save-btn" [disabled]="editForm.invalid">保存</button>
+          <button type="submit" class="save-btn">保存</button>
         </div>
       </form>
     </div>

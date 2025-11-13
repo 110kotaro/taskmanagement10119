@@ -8,7 +8,7 @@
       <button class="back-btn" (click)="goBack()">ログイン画面に戻る</button>
     </div>
 
-    <div *ngIf="!isLoading && invitationInfo && !errorMessage">
+    <div *ngIf="!isLoading && invitationInfo">
       <div class="header">
         <h1>チーム招待</h1>
         <p class="invitation-info">
@@ -16,48 +16,40 @@
         </p>
       </div>
 
-      <form (ngSubmit)="onSubmit()" class="invitation-form">
-        <div class="form-group">
-          <label>
-            <input 
-              type="radio" 
-              name="userType" 
-              [value]="false"
-              [checked]="!isNewUser"
-              (change)="isNewUser = false">
-            <span>既存ユーザーでログイン</span>
-          </label>
-          <label>
-            <input 
-              type="radio" 
-              name="userType" 
-              [value]="true"
-              [checked]="isNewUser"
-              (change)="isNewUser = true">
-            <span>新規ユーザー登録</span>
-          </label>
-        </div>
+      <!-- ユーザータイプ切り替え -->
+      <div class="form-group toggle-user-type">
+        <label>
+          <input 
+            type="radio" 
+            name="userType" 
+            [value]="false"
+            [checked]="!isNewUser"
+            (change)="toggleNewUser()">
+          <span>既存ユーザーでログイン</span>
+        </label>
+        <label>
+          <input 
+            type="radio" 
+            name="userType" 
+            [value]="true"
+            [checked]="isNewUser"
+            (change)="toggleNewUser()">
+          <span>新規ユーザー登録</span>
+        </label>
+      </div>
 
+      <!-- ログインフォーム -->
+      <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="invitation-form" *ngIf="!isNewUser">
         <div class="form-group">
           <label for="email">メールアドレス *</label>
           <input 
             type="email" 
             id="email"
-            [(ngModel)]="email" 
-            name="email"
-            placeholder="メールアドレスを入力"
-            required>
-        </div>
-
-        <div class="form-group" *ngIf="isNewUser">
-          <label for="displayName">表示名 *</label>
-          <input 
-            type="text" 
-            id="displayName"
-            [(ngModel)]="displayName" 
-            name="displayName"
-            placeholder="表示名を入力"
-            required>
+            formControlName="email"
+            placeholder="メールアドレスを入力">
+          <div class="error" *ngIf="loginForm.get('email')?.invalid && loginForm.get('email')?.touched">
+            有効なメールアドレスを入力してください
+          </div>
         </div>
 
         <div class="form-group">
@@ -65,20 +57,79 @@
           <input 
             type="password" 
             id="password"
-            [(ngModel)]="password" 
-            name="password"
-            placeholder="パスワードを入力"
-            required>
+            formControlName="password"
+            placeholder="パスワードを入力">
+          <div class="error" *ngIf="loginForm.get('password')?.invalid && loginForm.get('password')?.touched">
+            パスワードは6文字以上である必要があります
+          </div>
         </div>
 
-        <div *ngIf="errorMessage" class="error-message-inline">
-          {{ errorMessage }}
-        </div>
+        <div class="error" *ngIf="errorMessage">{{ errorMessage }}</div>
 
         <div class="form-actions">
           <button type="button" class="cancel-btn" (click)="goBack()">キャンセル</button>
-          <button type="submit" class="submit-btn" [disabled]="isLoading">
-            {{ isLoading ? '処理中...' : (isNewUser ? '登録して参加' : 'ログインして参加') }}
+          <button type="submit" class="submit-btn" [disabled]="loginForm.invalid || isLoading">
+            {{ isLoading ? '処理中...' : 'ログインして参加' }}
+          </button>
+        </div>
+      </form>
+
+      <!-- 登録フォーム -->
+      <form [formGroup]="signUpForm" (ngSubmit)="onSubmit()" class="invitation-form" *ngIf="isNewUser">
+        <div class="form-group">
+          <label for="displayName">表示名 *</label>
+          <input 
+            type="text" 
+            id="displayName"
+            formControlName="displayName"
+            placeholder="表示名を入力">
+          <div class="error" *ngIf="signUpForm.get('displayName')?.invalid && signUpForm.get('displayName')?.touched">
+            表示名を入力してください
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="signup-email">メールアドレス *</label>
+          <input 
+            type="email" 
+            id="signup-email"
+            formControlName="email"
+            placeholder="メールアドレスを入力">
+          <div class="error" *ngIf="signUpForm.get('email')?.invalid && signUpForm.get('email')?.touched">
+            有効なメールアドレスを入力してください
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="signup-password">パスワード *</label>
+          <input 
+            type="password" 
+            id="signup-password"
+            formControlName="password"
+            placeholder="パスワードを入力">
+          <div class="error" *ngIf="signUpForm.get('password')?.invalid && signUpForm.get('password')?.touched">
+            パスワードは6文字以上である必要があります
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="confirmPassword">パスワード確認 *</label>
+          <input 
+            type="password" 
+            id="confirmPassword"
+            formControlName="confirmPassword"
+            placeholder="パスワードを再入力">
+          <div class="error" *ngIf="signUpForm.get('confirmPassword')?.invalid && signUpForm.get('confirmPassword')?.touched">
+            パスワードを再入力してください
+          </div>
+        </div>
+
+        <div class="error" *ngIf="errorMessage">{{ errorMessage }}</div>
+
+        <div class="form-actions">
+          <button type="button" class="cancel-btn" (click)="goBack()">キャンセル</button>
+          <button type="submit" class="submit-btn" [disabled]="signUpForm.invalid || isLoading">
+            {{ isLoading ? '処理中...' : '登録して参加' }}
           </button>
         </div>
       </form>

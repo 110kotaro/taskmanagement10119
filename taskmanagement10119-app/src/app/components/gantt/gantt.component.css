@@ -5,7 +5,7 @@
 
 .gantt-header {
   background: var(--gradient-primary);
-  padding: 0.75rem var(--spacing-xl);
+  padding: 1rem 2rem;
   box-shadow: var(--shadow-md);
   display: flex;
   justify-content: space-between;
@@ -13,7 +13,8 @@
   position: fixed;
   top: 0;
   left: 250px; /* デフォルト値 */
-  right: 0;
+  width: calc(100vw - 250px);
+  box-sizing: border-box;
   z-index: 100;
   transition: left 0.3s ease;
 }
@@ -21,12 +22,21 @@
 /* サイドバーが閉じている場合 */
 :host-context(.app-container.sidebar-closed) .gantt-header {
   left: 0;
+  width: 100%;
 }
 
 /* モバイルではサイドバーが閉じている前提で左から0 */
 @media (max-width: 768px) {
-  .gantt-header {
+  /* サイドバーが閉じている場合のみ左から0 */
+  :host-context(.app-container.sidebar-closed) .gantt-header {
     left: 0;
+    width: 100%;
+  }
+  
+  /* サイドバーが開いている場合は250pxから開始 */
+  .gantt-header {
+    left: 250px;
+    width: calc(100vw - 250px);
   }
 }
 
@@ -39,7 +49,7 @@
 .gantt-header h1 {
   margin: 0;
   color: white;
-  font-size: 1.8rem;
+  font-size: var(--font-size-xl);
 }
 
 .gantt-header-right {
@@ -53,10 +63,119 @@
 
 .gantt-card {
   background: var(--color-surface);
-  padding: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-xl);
   border-radius: var(--border-radius-lg);
   box-shadow: var(--shadow-md);
-  margin: var(--spacing-md);
+  margin: var(--spacing-xl);
+}
+
+/* フィルターセクション */
+.filter-section {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-md);
+  background: var(--color-background);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--spacing-lg);
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-right: 2rem;
+}
+
+.filter-label {
+  font-weight: 600;
+  color: var(--color-text);
+  min-width: 100px;
+  margin-right: 0rem;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  color: var(--color-text);
+  font-weight: normal;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.checkbox-label span {
+  user-select: none;
+}
+
+/* ソートセクション */
+.sort-section {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-md);
+  background: var(--color-background);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--spacing-lg);
+}
+
+.sort-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sort-group label {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: 0.9rem;
+}
+
+.sort-group select {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.sort-group select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.sort-order-btn {
+  padding: var(--spacing-sm) 0.75rem;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  min-width: 40px;
+}
+
+.sort-order-btn:hover {
+  background: var(--color-primary-dark);
 }
 
 
@@ -78,7 +197,7 @@
 }
 
 .mode-btn:hover {
-  background: rgba(102, 126, 234, 0.05);
+  background: rgba(102, 126, 234, 0.1);
 }
 
 .mode-btn.active {
@@ -87,21 +206,23 @@
 }
 
 .back-btn {
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-primary);
+  background: rgba(255, 255, 255, 0.2);
   color: white;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.5rem 1rem;
   border-radius: var(--border-radius);
   cursor: pointer;
+  font-size: var(--font-size-base);
+  transition: background 0.2s;
 }
 
 .back-btn:hover {
-  background: var(--color-primary-dark);
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .date-range-info {
   padding: 1rem;
-  background: #f5f5f5;
+  background: var(--color-background);
   border-radius: 8px;
   margin-bottom: 1.5rem;
 }
@@ -114,28 +235,28 @@
 
 .date-range-info p {
   margin: 0;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .change-date-btn, .reset-date-btn {
   padding: 0.5rem 1rem;
-  background: #667eea;
+  background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   cursor: pointer;
   font-weight: 600;
   font-size: 0.875rem;
 }
 
 .change-date-btn:hover, .reset-date-btn:hover {
-  background: #5568d3;
+  background: var(--color-primary-dark);
 }
 
 .date-picker {
   margin-top: 1rem;
   padding: 1rem;
-  background: white;
+  background: var(--color-surface);
   border-radius: 8px;
 }
 
@@ -155,29 +276,32 @@
 .date-input-group label {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .date-input-group input {
   padding: 0.5rem;
-  border: 2px solid #e0e0e0;
-  border-radius: 6px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
   font-size: 0.875rem;
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 .date-input-group input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--color-primary);
 }
 
 .reset-date-btn {
-  background: #999;
+  background: var(--color-text-secondary);
   align-self: flex-end;
   margin-left: auto;
 }
 
 .reset-date-btn:hover {
-  background: #777;
+  background: var(--color-text-secondary);
+  opacity: 0.8;
 }
 
 .display-period-selector {
@@ -188,33 +312,34 @@
 
 .display-period-selector label {
   font-weight: 600;
-  color: #333;
+  color: var(--color-text);
 }
 
 .display-period-selector select {
   padding: 0.5rem 1rem;
-  border: 1px solid #667eea;
-  border-radius: 6px;
-  background: white;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--border-radius);
+  background: var(--color-surface);
   cursor: pointer;
   font-size: 0.875rem;
-  color: #333;
+  color: var(--color-text);
   transition: all 0.2s;
 }
 
 .display-period-selector select:hover {
-  border-color: #5568d3;
-  background: #f0f4ff;
+  border-color: var(--color-primary-dark);
+  background: var(--color-background);
 }
 
 .gantt-nav-controls {
   display: flex;
   padding: 1rem;
-  background: #f9f9f9;
+  background: var(--color-background);
   border-radius: 8px;
   margin-bottom: 0.5rem;
   justify-content: space-between;
   align-items: center;
+  position: relative;
 }
 
 .period-change-container {
@@ -225,10 +350,10 @@
 
 .nav-btn {
   padding: 0.5rem 1rem;
-  background: #667eea;
+  background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   cursor: pointer;
   font-weight: 600;
   font-size: 0.875rem;
@@ -237,7 +362,7 @@
 }
 
 .nav-btn:hover {
-  background: #5568d3;
+  background: var(--color-primary-dark);
 }
 
 .nav-btn:active {
@@ -248,10 +373,11 @@
   display: flex;
   gap: 2rem;
   padding: 0.5rem;
-  background: #f9f9f9;
+  background: var(--color-background);
   border-radius: 8px;
   margin-bottom: 0.5rem;
   flex-wrap: wrap;
+  color: var(--color-text);
 }
 
 .legend-item {
@@ -269,9 +395,9 @@
 .gantt-chart-wrapper {
   overflow-x: auto;
   overflow-y: visible;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: #fafafa;
+  background: var(--color-background);
   position: relative;
 }
 
@@ -306,12 +432,12 @@
   top: 40px; /* ヘッダー行の高さ分下げる */
   bottom: 0;
   width: 1px;
-  background-color: #747474;
+  background-color: var(--color-border);
 }
 
 .gantt-header-row {
-  background: #f5f5f5;
-  border-bottom: 2px solid #e0e0e0;
+  background: var(--color-background);
+  border-bottom: 2px solid var(--color-border);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -321,14 +447,14 @@
 .task-label-header {
   flex: 0 0 250px;
   font-weight: 600;
-  color: #666;
+  color: var(--color-text-secondary);
   padding: 0.5rem;
-  background: white;
-  border-right: 2px solid #e0e0e0;
+  background: var(--color-surface);
+  border-right: 2px solid var(--color-border);
   position: sticky;
   left: 0rem;
   z-index: 15;
-  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-sm);
 }
 
 .date-columns-container {
@@ -345,9 +471,9 @@
   min-width: 30px;
   text-align: center;
   padding: 0.25rem;
-  border-right: 1px solid #e0e0e0;
+  border-right: 1px solid var(--color-border);
   font-size: 0.75rem;
-  color: #666;
+  color: var(--color-text-secondary);
   position: relative;
 }
 
@@ -363,7 +489,7 @@
   top: 40px; /* ヘッダー行の下から */
   bottom: -1000px; /* 十分下まで */
   width: 1px;
-  background-color: #747474;
+  background-color: var(--color-border);
   z-index: 1;
   pointer-events: none;
 }
@@ -392,19 +518,19 @@
   display: flex;
   align-items: center;
   padding: 0.5rem;
-  background: white;
-  border-right: 2px solid #e0e0e0;
+  background: var(--color-surface);
+  border-right: 2px solid var(--color-border);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s;
   position: sticky;
   left: 0rem;
   z-index: 5;
-  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-sm);
 }
 
 .task-label:hover {
-  background: #f5f5f5;
+  background: var(--color-background);
 }
 
 .status-dot {
@@ -416,18 +542,18 @@
 
 .task-title {
   flex: 1;
-  color: #333;
+  color: var(--color-text);
   font-weight: 600;
 }
 
 .no-tasks-label {
-  color: #999;
+  color: var(--color-text-secondary);
   font-style: italic;
 }
 
 .task-date {
   font-size: 0.875rem;
-  color: #999;
+  color: var(--color-text-secondary);
   margin-left: 0.5rem;
 }
 
@@ -436,7 +562,7 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  background-color: #747474;
+  background-color: var(--color-border);
   pointer-events: none;
 }
 
@@ -444,8 +570,8 @@
   position: relative;
   display: flex;
   height: 50px;
-  background: #fafafa;
-  border-left: 1px solid #e0e0e0;
+  background: var(--color-background);
+  border-left: 1px solid var(--color-border);
   overflow: visible;
   min-width: 0;
   flex-shrink: 0;
@@ -487,30 +613,30 @@
 .loading, .no-tasks {
   text-align: center;
   padding: 3rem;
-  color: #999;
+  color: var(--color-text-secondary);
 }
 
 /* CSS Grid 用のスタイル */
 .grid-task-label-header {
   grid-column: 1;
   font-weight: 600;
-  color: #666;
+  color: var(--color-text-secondary);
   padding: 0.5rem;
-  background: white;
-  border-right: 2px solid #e0e0e0;
+  background: var(--color-surface);
+  border-right: 2px solid var(--color-border);
   position: sticky;
   left: 0;
   z-index: 15;
-  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-sm);
 }
 
 .grid-month-label-header {
   grid-column: 1;
   font-weight: 600;
-  color: #666;
+  color: var(--color-text-secondary);
   padding: 0.5rem;
-  background: white;
-  border-right: 2px solid #e0e0e0;
+  background: var(--color-surface);
+  border-right: 2px solid var(--color-border);
   position: sticky;
   left: 0;
   z-index: 15;
@@ -520,21 +646,21 @@
   text-align: center;
   padding: 0.25rem;
   font-size: 0.75rem;
-  color: #666;
+  color: var(--color-text-secondary);
   position: relative;
-  background: #f5f5f5;
+  background: var(--color-background);
 }
 
 .grid-month-label-span {
   position: relative;
   padding: 0.25rem;
   font-size: 0.75rem;
-  background: #f5f5f5;
-  border-top: 1px solid #e0e0e0;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--color-background);
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
   display: flex;
   align-items: center;
-  border-right: 1px solid #e0e0e0;
+  border-right: 1px solid var(--color-border);
 }
 
 /* 月の開始位置には常に左側の線を引く */
@@ -565,7 +691,7 @@
 
 .month-label {
   font-weight: 600;
-  color: #666;
+  color: var(--color-text-secondary);
   z-index: 2;
   position: relative;
   padding-left: 0.5rem;
@@ -574,18 +700,18 @@
 .grid-date-column {
   text-align: center;
   padding: 0.25rem;
-  border-right: 1px solid #e0e0e0;
+  border-right: 1px solid var(--color-border);
   font-size: 0.75rem;
-  color: #666;
+  color: var(--color-text-secondary);
   position: relative;
-  background: #f5f5f5;
-  border-bottom: 2px solid #e0e0e0;
+  background: var(--color-background);
+  border-bottom: 2px solid var(--color-border);
 }
 
 .grid-date-column.today {
-  background: #cfe8fc;
+  background: rgba(33, 150, 243, 0.15);
   font-weight: bold;
-  color: #1976d2;
+  color: var(--color-info);
 }
 
 /*.grid-date-column:nth-child(7n+2) {
@@ -600,7 +726,7 @@
   top: 40px;
   bottom: 0;
   width: 1px;
-  background-color: #747474;
+  background-color: var(--color-border);
   z-index: 1;
   pointer-events: none;
 }
@@ -610,32 +736,33 @@
   display: flex;
   align-items: center;
   padding: 0.5rem;
-  background: white;
-  border-right: 2px solid #e0e0e0;
+  background: var(--color-surface);
+  border-right: 2px solid var(--color-border);
+  border-bottom:1px solid var(--color-border);
   font-weight: 500;
   position: sticky;
   left: 0;
   z-index: 5;
-  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-sm);
   min-height: 50px;
 }
 
 .grid-task-label:hover {
-  background: #f5f5f5;
+  background: var(--color-background);
 }
 
 .grid-date-cell {
   min-height: 50px;
   padding: 0;
-  border-right: 1px solid #e0e0e0;
-  background: #fafafa;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-background);
   position: relative;
   display: flex;
   align-items: center;
 }
 
 .grid-date-cell.today {
-  background: #cfe8fc;
+  background: rgba(33, 150, 243, 0.15);
 }
 
 /*.grid-date-cell:nth-child(7n+2) {
@@ -757,16 +884,16 @@
 }
 
 .date-edit-dialog {
-  background: white;
-  border-radius: 12px;
+  background: var(--color-surface);
+  border-radius: var(--border-radius-lg);
   padding: 2rem;
   min-width: 400px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-lg);
 }
 
 .date-edit-dialog h3 {
   margin: 0 0 1.5rem 0;
-  color: #333;
+  color: var(--color-text);
   font-size: 1.5rem;
 }
 
@@ -782,20 +909,22 @@
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 600;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .dialog-content input[type="date"] {
   width: 100%;
   padding: 0.5rem;
-  border: 2px solid #e0e0e0;
-  border-radius: 6px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius);
   font-size: 1rem;
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 .dialog-content input[type="date"]:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--color-primary);
 }
 
 .dialog-actions {
@@ -816,21 +945,22 @@
 }
 
 .btn-cancel {
-  background: #e0e0e0;
-  color: #333;
+  background: var(--color-border);
+  color: var(--color-text);
 }
 
 .btn-cancel:hover {
-  background: #d0d0d0;
+  background: var(--color-text-secondary);
+  opacity: 0.8;
 }
 
 .btn-confirm {
-  background: #667eea;
+  background: var(--color-primary);
   color: white;
 }
 
 .btn-confirm:hover {
-  background: #5568d3;
+  background: var(--color-primary-dark);
 }
 
 .bar-duration {
@@ -844,11 +974,11 @@
   position: fixed;
   z-index: 1000;
   pointer-events: none;
-  background: white;
-  border: 2px solid #667eea;
+  background: var(--color-surface);
+  border: 2px solid var(--color-primary);
   border-radius: 8px;
   padding: 0.75rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
   min-width: 250px;
   max-width: 350px;
   transform: translateX(-50%) translateY(-100%); /* 中央揃え + 上に配置 */
@@ -866,7 +996,7 @@
   height: 0;
   border-left: 10px solid transparent;
   border-right: 10px solid transparent;
-  border-top: 10px solid #667eea;
+  border-top: 10px solid var(--color-primary);
 }
 
 .task-tooltip::before {
@@ -879,7 +1009,7 @@
   height: 0;
   border-left: 10px solid transparent;
   border-right: 10px solid transparent;
-  border-top: 10px solid white;
+  border-top: 10px solid var(--color-surface);
   z-index: 1;
 }
 
@@ -897,13 +1027,13 @@
 
 .tooltip-label {
   font-weight: 600;
-  color: #666;
+  color: var(--color-text-secondary);
   min-width: 90px;
   flex-shrink: 0;
 }
 
 .tooltip-value {
-  color: #333;
+  color: var(--color-text);
   flex: 1;
   word-break: break-word;
 }

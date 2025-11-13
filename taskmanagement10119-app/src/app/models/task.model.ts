@@ -80,6 +80,7 @@ export interface Comment {
   content: string;
   createdAt: Timestamp;
   updatedAt?: Timestamp;
+  mentionedUserIds?: string[]; // メンションされたユーザーIDのリスト
 }
 
 export interface Task {

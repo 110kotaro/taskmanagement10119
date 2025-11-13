@@ -31,6 +31,29 @@ export class AuthService {
     return this.currentUserSubject.value;
   }
 
+  /**
+   * Firebase Authenticationのエラーコードを日本語メッセージに変換
+   */
+  private getAuthErrorMessage(error: any): string {
+    const errorCode = error?.code || '';
+    
+    const errorMessages: { [key: string]: string } = {
+      'auth/user-not-found': 'このメールアドレスは登録されていません',
+      'auth/wrong-password': 'パスワードが正しくありません',
+      'auth/invalid-credential': 'メールアドレスまたはパスワードが正しくありません',
+      'auth/invalid-email': 'メールアドレスの形式が正しくありません',
+      'auth/user-disabled': 'このアカウントは無効化されています',
+      'auth/too-many-requests': 'リクエストが多すぎます。しばらく待ってから再度お試しください',
+      'auth/network-request-failed': 'ネットワークエラーが発生しました。インターネット接続を確認してください',
+      'auth/email-already-in-use': 'このメールアドレスは既に使用されています',
+      'auth/weak-password': 'パスワードが弱すぎます。6文字以上の強力なパスワードを設定してください',
+      'auth/operation-not-allowed': 'この操作は許可されていません',
+      'auth/requires-recent-login': 'セキュリティのため、再度ログインしてください'
+    };
+
+    return errorMessages[errorCode] || error?.message || 'ログインに失敗しました';
+  }
+
   async signUp(email: string, password: string, displayName: string): Promise<void> {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -61,6 +84,8 @@ export class AuthService {
           projectDeleted: true,
           projectRestored: true,
           projectCompleted: true,
+          projectMemberAdded: true,
+          projectMemberRemoved: true,
           taskOverdue: true,
           taskReminder: true,
           startDateOverdue: true,
@@ -86,6 +111,8 @@ export class AuthService {
           projectDeletedWebPush: true,
           projectRestoredWebPush: true,
           projectCompletedWebPush: true,
+          projectMemberAddedWebPush: true,
+          projectMemberRemovedWebPush: true,
           taskOverdueWebPush: true,
           taskReminderWebPush: true,
           startDateOverdueWebPush: true,
@@ -106,7 +133,7 @@ export class AuthService {
       
       await this.router.navigate(['/home']);
     } catch (error: any) {
-      throw new Error(error.message);
+      throw new Error(this.getAuthErrorMessage(error));
     }
   }
 
@@ -115,7 +142,7 @@ export class AuthService {
       await signInWithEmailAndPassword(auth, email, password);
       await this.router.navigate(['/home']);
     } catch (error: any) {
-      throw new Error(error.message);
+      throw new Error(this.getAuthErrorMessage(error));
     }
   }
 
@@ -151,6 +178,12 @@ export class AuthService {
             taskCompleted: true,
             projectCreated: true,
             projectUpdated: true,
+            projectDeleted: true,
+            projectRestored: true,
+            projectCompleted: true,
+            projectMemberAdded: true,
+            projectMemberRemoved: true,
+            projectMemberRoleChanged: true,
             taskOverdue: true,
             taskReminder: true,
             startDateOverdue: true,
@@ -173,6 +206,12 @@ export class AuthService {
             taskCompletedWebPush: true,
             projectCreatedWebPush: true,
             projectUpdatedWebPush: true,
+            projectDeletedWebPush: true,
+            projectRestoredWebPush: true,
+            projectCompletedWebPush: true,
+            projectMemberAddedWebPush: true,
+            projectMemberRemovedWebPush: true,
+            projectMemberRoleChangedWebPush: true,
             taskOverdueWebPush: true,
             taskReminderWebPush: true,
             startDateOverdueWebPush: true,
@@ -204,6 +243,8 @@ export class AuthService {
           if (settings.projectDeleted === undefined) settings.projectDeleted = true;
           if (settings.projectRestored === undefined) settings.projectRestored = true;
           if (settings.projectCompleted === undefined) settings.projectCompleted = true;
+          if (settings.projectMemberAdded === undefined) settings.projectMemberAdded = true;
+          if (settings.projectMemberRemoved === undefined) settings.projectMemberRemoved = true;
           if (settings.taskOverdue === undefined) settings.taskOverdue = true;
           if (settings.taskReminder === undefined) settings.taskReminder = true;
           if (settings.startDateOverdue === undefined) settings.startDateOverdue = true;
@@ -229,6 +270,8 @@ export class AuthService {
           if (settings.projectDeletedWebPush === undefined) settings.projectDeletedWebPush = true;
           if (settings.projectRestoredWebPush === undefined) settings.projectRestoredWebPush = true;
           if (settings.projectCompletedWebPush === undefined) settings.projectCompletedWebPush = true;
+          if (settings.projectMemberAddedWebPush === undefined) settings.projectMemberAddedWebPush = true;
+          if (settings.projectMemberRemovedWebPush === undefined) settings.projectMemberRemovedWebPush = true;
           if (settings.taskOverdueWebPush === undefined) settings.taskOverdueWebPush = true;
           if (settings.taskReminderWebPush === undefined) settings.taskReminderWebPush = true;
           if (settings.startDateOverdueWebPush === undefined) settings.startDateOverdueWebPush = true;
@@ -271,6 +314,12 @@ export class AuthService {
             taskCompleted: true,
             projectCreated: true,
             projectUpdated: true,
+            projectDeleted: true,
+            projectRestored: true,
+            projectCompleted: true,
+            projectMemberAdded: true,
+            projectMemberRemoved: true,
+            projectMemberRoleChanged: true,
             taskOverdue: true,
             taskReminder: true,
             startDateOverdue: true,
@@ -293,6 +342,12 @@ export class AuthService {
             taskCompletedWebPush: true,
             projectCreatedWebPush: true,
             projectUpdatedWebPush: true,
+            projectDeletedWebPush: true,
+            projectRestoredWebPush: true,
+            projectCompletedWebPush: true,
+            projectMemberAddedWebPush: true,
+            projectMemberRemovedWebPush: true,
+            projectMemberRoleChangedWebPush: true,
             taskOverdueWebPush: true,
             taskReminderWebPush: true,
             startDateOverdueWebPush: true,
@@ -324,6 +379,8 @@ export class AuthService {
           if (settings.projectDeleted === undefined) settings.projectDeleted = true;
           if (settings.projectRestored === undefined) settings.projectRestored = true;
           if (settings.projectCompleted === undefined) settings.projectCompleted = true;
+          if (settings.projectMemberAdded === undefined) settings.projectMemberAdded = true;
+          if (settings.projectMemberRemoved === undefined) settings.projectMemberRemoved = true;
           if (settings.taskOverdue === undefined) settings.taskOverdue = true;
           if (settings.taskReminder === undefined) settings.taskReminder = true;
           if (settings.startDateOverdue === undefined) settings.startDateOverdue = true;
@@ -349,6 +406,8 @@ export class AuthService {
           if (settings.projectDeletedWebPush === undefined) settings.projectDeletedWebPush = true;
           if (settings.projectRestoredWebPush === undefined) settings.projectRestoredWebPush = true;
           if (settings.projectCompletedWebPush === undefined) settings.projectCompletedWebPush = true;
+          if (settings.projectMemberAddedWebPush === undefined) settings.projectMemberAddedWebPush = true;
+          if (settings.projectMemberRemovedWebPush === undefined) settings.projectMemberRemovedWebPush = true;
           if (settings.taskOverdueWebPush === undefined) settings.taskOverdueWebPush = true;
           if (settings.taskReminderWebPush === undefined) settings.taskReminderWebPush = true;
           if (settings.startDateOverdueWebPush === undefined) settings.startDateOverdueWebPush = true;

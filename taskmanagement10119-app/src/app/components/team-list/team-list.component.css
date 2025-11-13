@@ -14,18 +14,28 @@
   position: fixed;
   top: 0;
   left: 250px;
-  right: 0;
+  width: calc(100vw - 250px);
+  box-sizing: border-box;
   z-index: 100;
   transition: left 0.3s ease;
 }
 
 :host-context(.app-container.sidebar-closed) .header {
   left: 0;
+  width: 100%;
 }
 
 @media (max-width: 768px) {
-  .header {
+  /* サイドバーが閉じている場合のみ左から0 */
+  :host-context(.app-container.sidebar-closed) .header {
     left: 0;
+    width: 100%;
+  }
+  
+  /* サイドバーが開いている場合は250pxから開始 */
+  .header {
+    left: 250px;
+    width: calc(100vw - 250px);
   }
 }
 

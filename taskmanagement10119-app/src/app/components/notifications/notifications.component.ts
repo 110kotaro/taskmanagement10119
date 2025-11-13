@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { Location } from '@angular/common';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../../../firebase-config';
 import { NotificationService } from '../../services/notification.service';
@@ -22,6 +23,7 @@ export class NotificationsComponent implements OnInit {
   private authService = inject(AuthService);
   private teamService = inject(TeamService);
   private router = inject(Router);
+  private location = inject(Location);
 
   notifications: Notification[] = [];
   isLoading = true;
@@ -124,6 +126,24 @@ export class NotificationsComponent implements OnInit {
       return;
     }
 
+    // ProjectCompleted/ProjectUpdated通知でcheckTypeがある場合、プロジェクト日付チェックモーダルを表示
+    if ((notification.type === NotificationType.ProjectCompleted || notification.type === NotificationType.ProjectUpdated) 
+        && notification.checkType && notification.projectId) {
+      // カスタムイベントでAppComponentに通知
+      window.dispatchEvent(new CustomEvent('showProjectDateCheckModal', {
+        detail: {
+          projectId: notification.projectId,
+          checkType: notification.checkType
+        }
+      }));
+      // 通知を読み取り済みにする
+      if (!notification.isRead) {
+        await this.notificationService.markAsRead(notification.id);
+        notification.isRead = true;
+      }
+      return;
+    }
+
     if (!notification.isRead) {
       await this.notificationService.markAsRead(notification.id);
       notification.isRead = true;
@@ -156,6 +176,12 @@ export class NotificationsComponent implements OnInit {
     try {
       await this.teamService.acceptInvitation(notification.invitationId);
       alert('チームに参加しました！');
+
+       // 招待情報を更新（ステータスをacceptedに）
+    if (this.invitationMap[notification.invitationId]) {
+      this.invitationMap[notification.invitationId].status = 'accepted';
+      this.invitationMap[notification.invitationId].acceptedAt = Timestamp.now() as any;
+    }
       
       // 通知を読み取り済みにする
       if (!notification.isRead) {
@@ -163,12 +189,15 @@ export class NotificationsComponent implements OnInit {
         notification.isRead = true;
       }
 
-      // チーム詳細ページに遷移
-      if (notification.teamId) {
-        this.router.navigate(['/team', notification.teamId]);
-      } else {
-        await this.loadNotifications();
-      }
+      // チーム詳細ページに遷移（一旦コメントアウト）
+      // if (notification.teamId) {
+      //   this.router.navigate(['/team', notification.teamId]);
+      // } else {
+      //   await this.loadNotifications();
+      // }
+      
+      // 通知一覧を再読み込み
+      await this.loadNotifications();
     } catch (error: any) {
       alert('招待の承認に失敗しました: ' + error.message);
     }
@@ -187,6 +216,12 @@ export class NotificationsComponent implements OnInit {
     try {
       await this.teamService.rejectInvitation(notification.invitationId);
       alert('招待を拒否しました');
+
+       // 招待情報を更新（ステータスをrejectedに）
+    if (this.invitationMap[notification.invitationId]) {
+      this.invitationMap[notification.invitationId].status = 'rejected';
+      this.invitationMap[notification.invitationId].rejectedAt = Timestamp.now() as any;
+    }
       
       // 通知を読み取り済みにする
       if (!notification.isRead) {
@@ -214,6 +249,13 @@ export class NotificationsComponent implements OnInit {
       'task_overdue': 'タスク期限切れ',
       'task_reminder': 'リマインダー',
       'project_created': 'プロジェクト作成',
+      'project_updated': 'プロジェクト更新',
+      'project_deleted': 'プロジェクト削除',
+      'project_restored': 'プロジェクト復元',
+      'project_completed': 'プロジェクト完了',
+      'project_member_added': 'プロジェクトメンバー追加',
+      'project_member_removed': 'プロジェクトメンバー削除',
+      'project_member_role_changed': 'プロジェクトメンバー権限変更',
       'team_invitation': 'チーム招待',
       'team_leave': 'チーム退会',
       'team_invitation_accepted': 'チーム招待承認',
@@ -236,7 +278,11 @@ export class NotificationsComponent implements OnInit {
   }
 
   goBack() {
-    this.router.navigate(['/home']);
+    if (window.history.length > 1) {
+      this.location.back();
+    } else {
+      this.router.navigate(['/home']);
+    }
   }
 
   // フィルター適用後の通知リストを取得
@@ -343,6 +389,87 @@ export class NotificationsComponent implements OnInit {
       await this.loadNotifications();
     } catch (error: any) {
       alert('一括既読に失敗しました: ' + error.message);
+    }
+  }
+
+  // フィルター後の通知を一括削除（ゴミ箱以外）
+  async deleteAllFiltered() {
+    if (this.filteredNotifications.length === 0) {
+      return;
+    }
+
+    // 削除済み通知は除外
+    const targetNotifications = this.filteredNotifications.filter(n => !n.isDeleted);
+
+    if (targetNotifications.length === 0) {
+      alert('削除できるお知らせがありません');
+      return;
+    }
+
+    if (!confirm(`${targetNotifications.length}件のお知らせを削除しますか？`)) {
+      return;
+    }
+
+    try {
+      const notificationIds = targetNotifications.map(n => n.id);
+      await this.notificationService.deleteAllNotifications(notificationIds);
+      await this.loadNotifications();
+    } catch (error: any) {
+      alert('一括削除に失敗しました: ' + error.message);
+    }
+  }
+
+  // ゴミ箱内の通知を一括復元
+  async restoreAllFiltered() {
+    if (this.filteredNotifications.length === 0) {
+      return;
+    }
+
+    // 削除済み通知のみ
+    const targetNotifications = this.filteredNotifications.filter(n => n.isDeleted);
+
+    if (targetNotifications.length === 0) {
+      alert('復元できるお知らせがありません');
+      return;
+    }
+
+    if (!confirm(`${targetNotifications.length}件のお知らせを復元しますか？`)) {
+      return;
+    }
+
+    try {
+      const notificationIds = targetNotifications.map(n => n.id);
+      await this.notificationService.restoreAllNotifications(notificationIds);
+      await this.loadNotifications();
+    } catch (error: any) {
+      alert('一括復元に失敗しました: ' + error.message);
+    }
+  }
+
+  // ゴミ箱内の通知を一括完全削除
+  async permanentlyDeleteAllFiltered() {
+    if (this.filteredNotifications.length === 0) {
+      return;
+    }
+
+    // 削除済み通知のみ
+    const targetNotifications = this.filteredNotifications.filter(n => n.isDeleted);
+
+    if (targetNotifications.length === 0) {
+      alert('完全削除できるお知らせがありません');
+      return;
+    }
+
+    if (!confirm(`${targetNotifications.length}件のお知らせを完全に削除しますか？この操作は取り消せません。`)) {
+      return;
+    }
+
+    try {
+      const notificationIds = targetNotifications.map(n => n.id);
+      await this.notificationService.permanentlyDeleteAllNotifications(notificationIds);
+      await this.loadNotifications();
+    } catch (error: any) {
+      alert('一括完全削除に失敗しました: ' + error.message);
     }
   }
 }

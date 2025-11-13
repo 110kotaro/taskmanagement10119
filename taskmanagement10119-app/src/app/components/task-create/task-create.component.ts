@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute } from '@angular/router';
+import { Location } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Timestamp } from 'firebase/firestore';
 import { AuthService } from '../../services/auth.service';
@@ -10,7 +11,7 @@ import { TeamService } from '../../services/team.service';
 import { Project } from '../../models/project.model';
 import { TaskType, RecurrenceType } from '../../models/task.model';
 import { User } from '../../models/user.model';
-import { Team, TeamMember } from '../../models/team.model';
+import { Team, TeamMember, TeamRole } from '../../models/team.model';
 
 @Component({
   selector: 'app-task-create',
@@ -27,12 +28,14 @@ export class TaskCreateComponent implements OnInit {
   private teamService = inject(TeamService);
   private fb = inject(FormBuilder);
   private route = inject(ActivatedRoute);
+  private location = inject(Location);
 
   createForm: FormGroup;
   isCreating = false;
   projects: Project[] = [];
   users: User[] = []; // ユーザーリスト（担当者選択用）
   teamMembers: TeamMember[] = []; // チームメンバーリスト（チームモード時）
+  projectMembers: any[] = []; // プロジェクトメンバーリスト（プロジェクト選択時）
   userTeams: Team[] = []; // ユーザーが所属しているチームリスト
   viewMode: 'personal' | 'team' = 'personal';
   selectedTeamId: string | null = null;
@@ -46,7 +49,6 @@ export class TaskCreateComponent implements OnInit {
       status: ['not_started', Validators.required],
       priority: ['normal', Validators.required],
       taskType: ['normal'],
-      customTaskType: [''],
       startDate: ['', Validators.required],
       startTime: [''], // 開始時間（任意）
       endDate: ['', Validators.required],
@@ -125,11 +127,33 @@ export class TaskCreateComponent implements OnInit {
         const project = this.projects.find(p => p.id === projectId);
         if (project) {
           this.createForm.patchValue({
-            projectId: projectId
+            projectId: projectId,
+            taskType: 'project' // プロジェクトが設定されている場合、タスクタイプを自動設定
           });
+          // プロジェクトメンバーを読み込む
+          await this.loadProjectMembers(projectId);
         }
       }
     }
+
+    // プロジェクトIDの変更を監視してプロジェクトメンバーを読み込む
+    this.createForm.get('projectId')?.valueChanges.subscribe(async (projectId) => {
+      if (projectId) {
+        await this.loadProjectMembers(projectId);
+        // プロジェクトが設定された場合、タスクタイプを自動で「project」に設定
+        const currentTaskType = this.createForm.get('taskType')?.value;
+        if (currentTaskType !== 'project') {
+          this.createForm.patchValue({ taskType: 'project' });
+        }
+      } else {
+        this.projectMembers = [];
+        // プロジェクトが解除された場合、タスクタイプが「project」の場合は「normal」に戻す
+        const currentTaskType = this.createForm.get('taskType')?.value;
+        if (currentTaskType === 'project') {
+          this.createForm.patchValue({ taskType: 'normal' });
+        }
+      }
+    });
   }
   
   async loadTeamMembers(teamId: string) {
@@ -140,6 +164,20 @@ export class TaskCreateComponent implements OnInit {
       }
     } catch (error) {
       console.error('Error loading team members:', error);
+    }
+  }
+
+  async loadProjectMembers(projectId: string) {
+    try {
+      const project = await this.projectService.getProject(projectId);
+      if (project && project.members) {
+        this.projectMembers = project.members;
+      } else {
+        this.projectMembers = [];
+      }
+    } catch (error) {
+      console.error('Error loading project members:', error);
+      this.projectMembers = [];
     }
   }
 
@@ -154,7 +192,6 @@ export class TaskCreateComponent implements OnInit {
     if (queryParams.get('priority')) formData.priority = queryParams.get('priority');
     if (queryParams.get('customPriority')) formData.customPriority = queryParams.get('customPriority');
     if (queryParams.get('taskType')) formData.taskType = queryParams.get('taskType');
-    if (queryParams.get('customTaskType')) formData.customTaskType = queryParams.get('customTaskType');
     if (queryParams.get('startDate')) formData.startDate = queryParams.get('startDate');
     if (queryParams.get('startTime')) formData.startTime = queryParams.get('startTime');
     if (queryParams.get('endDate')) formData.endDate = queryParams.get('endDate');
@@ -293,24 +330,46 @@ export class TaskCreateComponent implements OnInit {
       
       // プロジェクト名を取得
       let projectName: string | undefined;
+      let project: Project | undefined;
       if (formValue.projectId) {
-        const project = this.projects.find(p => p.id === formValue.projectId);
+        project = this.projects.find(p => p.id === formValue.projectId);
         projectName = project?.name;
+        
+        // チームプロジェクトの場合、プロジェクトメンバー、プロジェクトオーナー、またはチーム管理者かどうかをチェック
+        if (project && project.teamId) {
+          const isProjectMember = project.members && project.members.some(m => m.userId === user.uid);
+          const isProjectOwner = project.ownerId === user.uid;
+          
+          // チーム管理者かどうかをチェック
+          let isTeamAdmin = false;
+          if (project.teamId) {
+            try {
+              const team = await this.teamService.getTeam(project.teamId);
+              if (team) {
+                const member = team.members.find(m => m.userId === user.uid);
+                isTeamAdmin = member?.role === TeamRole.Admin || member?.role === TeamRole.Owner || team.ownerId === user.uid;
+              }
+            } catch (error) {
+              console.error('Error checking team admin:', error);
+            }
+          }
+          
+          if (!isProjectMember && !isProjectOwner && !isTeamAdmin) {
+            alert('このプロジェクトのタスクを作成する権限がありません。プロジェクトメンバー、プロジェクトオーナー、またはチーム管理者のみがタスクを作成できます。');
+            this.isCreating = false;
+            return;
+          }
+        }
       }
       
       // タスクタイプの決定
       let taskTypeValue = TaskType.Normal;
-      let customTaskTypeValue = undefined;
       
       if (formValue.taskType === 'normal') taskTypeValue = TaskType.Normal;
       else if (formValue.taskType === 'meeting') taskTypeValue = TaskType.Meeting;
       else if (formValue.taskType === 'regular') taskTypeValue = TaskType.Regular;
       else if (formValue.taskType === 'project') taskTypeValue = TaskType.Project;
       else if (formValue.taskType === 'other') taskTypeValue = TaskType.Other;
-      else if (formValue.taskType === 'custom') {
-        taskTypeValue = TaskType.Other;
-        customTaskTypeValue = formValue.customTaskType || undefined;
-      }
 
       // リマインダー設定（開始前、終了前、カスタム）
       const reminders: any[] = [];
@@ -398,13 +457,33 @@ export class TaskCreateComponent implements OnInit {
         endDateTime.setHours(23, 59, 59, 999);
       }
 
+      // 終了日時が開始日時より前でないかチェック
+      if (endDateTime.getTime() < startDateTime.getTime()) {
+        alert('終了日時は開始日時より後である必要があります');
+        this.isCreating = false;
+        return;
+      }
+
       // 担当者の処理
       let assigneeId: string | undefined = undefined;
       let assigneeName: string | undefined = undefined;
       if (formValue.assigneeId && formValue.assigneeId.trim() !== '') {
         assigneeId = formValue.assigneeId;
-        const selectedUser = this.users.find(u => u.id === assigneeId);
-        assigneeName = selectedUser?.displayName || selectedUser?.email || 'Unknown';
+        // プロジェクトが選択されている場合はプロジェクトメンバーから検索
+        if (formValue.projectId && this.projectMembers.length > 0) {
+          const selectedMember = this.projectMembers.find(m => m.userId === assigneeId);
+          assigneeName = selectedMember?.userName || selectedMember?.userEmail || 'Unknown';
+        }
+        // プロジェクトが選択されていない場合はチームメンバーから検索
+        else if (this.teamMembers.length > 0) {
+          const selectedMember = this.teamMembers.find(m => m.userId === assigneeId);
+          assigneeName = selectedMember?.userName || selectedMember?.userEmail || 'Unknown';
+        }
+        // フォールバック：usersから検索
+        else {
+          const selectedUser = this.users.find(u => u.id === assigneeId);
+          assigneeName = selectedUser?.displayName || selectedUser?.email || 'Unknown';
+        }
       } else {
         // 担当者が未選択の場合は担当者なし（undefined）
         assigneeId = undefined;
@@ -463,7 +542,6 @@ export class TaskCreateComponent implements OnInit {
         priority: formValue.priority,
         customPriority: formValue.customPriority || undefined,
         taskType: taskTypeValue,
-        customTaskType: customTaskTypeValue,
         startDate: Timestamp.fromDate(startDateTime),
         endDate: Timestamp.fromDate(endDateTime),
         projectId: formValue.projectId || undefined,
@@ -519,21 +597,8 @@ export class TaskCreateComponent implements OnInit {
   }
 
   goBack() {
-    const from = this.route.snapshot.queryParamMap.get('from');
-    if (from === 'project-detail') {
-      const projectId = this.route.snapshot.queryParamMap.get('projectId');
-      if (projectId) {
-        this.router.navigate(['/project', projectId]);
-        return;
-      }
-    }
-    if (from === 'task-detail') {
-      // 複製から来た場合は、元のタスク詳細に戻る（ただし、タスクIDがわからないのでホームに戻る）
-      this.router.navigate(['/home']);
-    } else if (from === 'gantt') {
-      this.router.navigate(['/gantt']);
-    } else if(from === 'task-list') {
-      this.router.navigate(['/task-list']);
+    if (window.history.length > 1) {
+      this.location.back();
     } else {
       this.router.navigate(['/home']);
     }

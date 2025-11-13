@@ -12,12 +12,12 @@
 }
 
 .modal-content {
-  background: white;
-  border-radius: 12px;
+  background: var(--color-surface);
+  border-radius: var(--border-radius-lg);
   padding: 2rem;
   max-width: 500px;
   width: 90%;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-lg);
 }
 
 .modal-header {
@@ -26,12 +26,12 @@
   align-items: center;
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 2px solid #e0e0e0;
+  border-bottom: 2px solid var(--color-border);
 }
 
 .modal-header h3 {
   margin: 0;
-  color: #333;
+  color: var(--color-text);
   font-size: 1.5rem;
 }
 
@@ -39,7 +39,7 @@
   background: none;
   border: none;
   font-size: 2rem;
-  color: #999;
+  color: var(--color-text-secondary);
   cursor: pointer;
   padding: 0;
   width: 30px;
@@ -52,24 +52,25 @@
 }
 
 .close-btn:hover {
-  background: #f0f0f0;
-  color: #333;
+  background: var(--color-background);
+  color: var(--color-text);
 }
 
 .modal-body {
-  color: #333;
+  color: var(--color-text);
 }
 
 .project-info {
   margin-bottom: 1.5rem;
   padding: 1rem;
-  background: #f5f5f5;
-  border-radius: 8px;
+  background: var(--color-background);
+  border-radius: var(--border-radius);
 }
 
 .project-info p {
   margin: 0.5rem 0;
   font-size: 1rem;
+  color: var(--color-text);
 }
 
 .action-buttons {
@@ -80,7 +81,7 @@
   font-size: 1.1rem;
   font-weight: 600;
   margin-bottom: 1.5rem;
-  color: #333;
+  color: var(--color-text);
 }
 
 .buttons {
@@ -92,7 +93,7 @@
 .btn {
   padding: 0.75rem 1.5rem;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--border-radius);
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
@@ -100,24 +101,24 @@
 }
 
 .btn-primary {
-  background: #667eea;
+  background: var(--color-primary);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #5568d3;
+  background: var(--color-primary-dark);
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+  box-shadow: var(--shadow-md);
 }
 
 .btn-secondary {
-  background: #e0e0e0;
-  color: #333;
+  background: var(--color-text-secondary);
+  color: white;
 }
 
 .btn-secondary:hover {
-  background: #d0d0d0;
+  opacity: 0.9;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-md);
 }
 

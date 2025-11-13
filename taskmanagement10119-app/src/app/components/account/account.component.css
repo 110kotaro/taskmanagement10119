@@ -5,15 +5,16 @@
 
 .header {
   background: var(--gradient-primary);
-  padding: var(--spacing-md) var(--spacing-xl);
+  padding: 1rem 2rem;
   box-shadow: var(--shadow-md);
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
+  gap: 1rem;
   position: fixed;
   top: 0;
   left: 250px;
-  right: 0;
+  width: calc(100vw - 250px);
+  box-sizing: border-box;
   z-index: 100;
   transition: left 0.3s ease;
 }
@@ -21,12 +22,21 @@
 /* サイドバーが閉じている場合 */
 :host-context(.app-container.sidebar-closed) .header {
   left: 0;
+  width: 100%;
 }
 
 /* モバイルではサイドバーが閉じている前提で左から0 */
 @media (max-width: 768px) {
-  .header {
+  /* サイドバーが閉じている場合のみ左から0 */
+  :host-context(.app-container.sidebar-closed) .header {
     left: 0;
+    width: 100%;
+  }
+  
+  /* サイドバーが開いている場合は250pxから開始 */
+  .header {
+    left: 250px;
+    width: calc(100vw - 250px);
   }
 }
 
@@ -34,7 +44,7 @@
   background: rgba(255, 255, 255, 0.2);
   color: white;
   border: 1px solid rgba(255, 255, 255, 0.3);
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: 0.5rem 1rem;
   border-radius: var(--border-radius);
   cursor: pointer;
   font-size: var(--font-size-base);

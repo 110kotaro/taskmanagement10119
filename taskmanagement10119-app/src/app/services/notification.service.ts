@@ -120,7 +120,8 @@ export class NotificationService {
         for (const chunk of teamIdChunks) {
           const teamQuery = query(
             collection(db, 'notifications'),
-            where('teamId', 'in', chunk)
+            where('teamId', 'in', chunk),
+            where('userId', '==', userId)  // userIdもフィルタリング
           );
           
           const teamSnapshot = await getDocs(teamQuery);
@@ -229,6 +230,61 @@ export class NotificationService {
           isRead: true,
           readAt: now
         });
+      }
+      
+      await batch.commit();
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  }
+
+  // 複数の通知を一括削除（論理削除）
+  async deleteAllNotifications(notificationIds: string[]): Promise<void> {
+    try {
+      const batch = writeBatch(db);
+      const now = Timestamp.now();
+      
+      for (const notificationId of notificationIds) {
+        const notificationRef = doc(db, 'notifications', notificationId);
+        batch.update(notificationRef, {
+          isDeleted: true,
+          deletedAt: now
+        });
+      }
+      
+      await batch.commit();
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  }
+
+  // 複数の通知を一括復元
+  async restoreAllNotifications(notificationIds: string[]): Promise<void> {
+    try {
+      const batch = writeBatch(db);
+      
+      for (const notificationId of notificationIds) {
+        const notificationRef = doc(db, 'notifications', notificationId);
+        batch.update(notificationRef, {
+          isDeleted: deleteField(),
+          deletedAt: deleteField()
+        });
+      }
+      
+      await batch.commit();
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  }
+
+  // 複数の通知を一括完全削除
+  async permanentlyDeleteAllNotifications(notificationIds: string[]): Promise<void> {
+    try {
+      const batch = writeBatch(db);
+      
+      for (const notificationId of notificationIds) {
+        const notificationRef = doc(db, 'notifications', notificationId);
+        batch.delete(notificationRef);
       }
       
       await batch.commit();

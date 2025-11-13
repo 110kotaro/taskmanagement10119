@@ -16,6 +16,7 @@ export class FcmService {
    * 通知許可をリクエストし、FCMトークンを取得
    */
   async requestPermission(): Promise<string | null> {
+    console.log('[FCM] requestPermission() called');
     if (!this.messaging) {
       console.warn('Firebase Messaging is not available');
       return null;
@@ -24,6 +25,7 @@ export class FcmService {
     try {
       // 通知許可をリクエスト
       const permission = await Notification.requestPermission();
+      console.log('[FCM] Notification permission:', permission);
       
       if (permission !== 'granted') {
         console.warn('Notification permission denied');
@@ -34,12 +36,15 @@ export class FcmService {
       // 注意: 実際のプロジェクトでは環境変数から取得してください
       const vapidKey = 'BJG777vjnyPVyDfGd60Cw-2xhOm203bUTl__pUHqtCfoj1uSyStx4TB-bjJWIqtUWbPuGVwKjp7b-Vz5RhB8rKM'; // TODO: Firebaseコンソールから取得したVAPIDキーを設定
       
-      // FCMトークンを取得
+      // FCMトークンを取得（Firebase Messaging SDKが自動的にService Workerを登録する）
+      console.log('[FCM] Getting FCM token...');
       const token = await getToken(this.messaging, { vapidKey });
+      console.log('[FCM] FCM token obtained:', token ? 'Yes' : 'No');
       
       if (token) {
         // トークンをFirestoreに保存
         await this.saveTokenToFirestore(token);
+        console.log('[FCM] FCM token saved to Firestore');
         return token;
       } else {
         console.warn('No FCM token available');

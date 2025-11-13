@@ -57,7 +57,8 @@ export class ProjectEndDateConfirmationComponent {
       // 終了日変更モードに（AppComponentで処理）
       this.actionSelected.emit(action);
     } else if (action === 'ignore') {
-      // 無視（チェック済みフラグは更新しない - 次回も確認するため）
+      // 無視（dateCheckedAtを更新して、次回も確認する）
+      await this.projectService.markProjectDateChecked(this.project.id);
       this.actionSelected.emit(action);
       this.closed.emit();
     }
