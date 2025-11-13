@@ -46,10 +46,10 @@
               <div class="sample-notes">
                 <h4>注意事項：</h4>
                 <ul>
-                  <li>日付形式：YYYY/MM/DD、YYYY-MM-DD、または YYYY年MM月DD日（例：2024/01/15、2024-01-15、2024年1月15日）</li>
-                  <li>時間形式：HH:MM（例：09:00、18:30）</li>
+                  <li>日付形式：YYYY/MM/DD、YYYY-MM-DD、または YYYY年MM月DD日（例：2024/01/15、2024-01-15、2024年1月15日　注：半角で入力してください。）</li>
+                  <li>時間形式：HH:MM（例：09:00、18:30　注：半角で入力してください。）</li>
                   <li>ステータス：未着手、進行中、完了</li>
-                  <li>優先度：重要、普通、低め、なし</li>
+                  <li>重要度：重要、普通、低め、なし</li>
                   <li>担当者名は既存のものを使用してください</li>
                   <li>チーム名が空欄、「-」、「ー」、「個人」の場合は個人タスクとして扱います</li>
                   <li>チーム名が指定されている場合は、チームタスクとして作成されます（存在しない、または自分が所属しないチームの場合は確認ダイアログが表示されます）</li>
@@ -125,10 +125,18 @@
               <tr>
                 <th class="row-number-col">行番号</th>
                 <th class="title-col">タイトル</th>
+                <th class="description-col">説明</th>
+                <th class="memo-col">メモ</th>
                 <th class="date-col">開始日</th>
+                <th class="time-col">開始時間</th>
                 <th class="date-col">終了日</th>
+                <th class="time-col">終了時間</th>
                 <th class="status-col">ステータス</th>
-                <th class="error-col">エラー</th>
+                <th class="priority-col">重要度</th>
+                <th class="assignee-col">担当者名</th>
+                <th class="project-col">プロジェクト名</th>
+                <th class="team-col">チーム名</th>
+                <th class="error-col">エラー　　</th>
                 <th class="import-col">インポート</th>
                 <th class="action-col">操作</th>
               </tr>
@@ -139,9 +147,17 @@
                   [class.editing]="editingRowIndex === i">
                 <td class="row-number-col">{{ row.rowIndex }}</td>
                 <td class="title-col">{{ row.mappedData['title'] || '-' }}</td>
+                <td class="description-col">{{ row.mappedData['description'] || '-' }}</td>
+                <td class="memo-col">{{ row.mappedData['memo'] || '-' }}</td>
                 <td class="date-col">{{ formatDateForDisplay(row.mappedData['startDate']) }}</td>
+                <td class="time-col">{{ row.mappedData['startTime'] || '-' }}</td>
                 <td class="date-col">{{ formatDateForDisplay(row.mappedData['endDate']) }}</td>
+                <td class="time-col">{{ row.mappedData['endTime'] || '-' }}</td>
                 <td class="status-col">{{ formatStatusForDisplay(row.mappedData['status']) }}</td>
+                <td class="priority-col">{{ formatPriorityForDisplay(row.mappedData['priority']) }}</td>
+                <td class="assignee-col">{{ row.mappedData['assigneeName'] || '-' }}</td>
+                <td class="project-col">{{ row.mappedData['projectName'] || '-' }}</td>
+                <td class="team-col">{{ row.mappedData['teamName'] || '-' }}</td>
                 <td class="error-col">
                   <div *ngIf="row.errors.length > 0" class="error-list">
                     <span *ngFor="let error of row.errors" class="error-item">{{ error }}</span>
@@ -178,6 +194,12 @@
             </div>
             <div class="form-row">
               <div class="form-group">
+                <label>メモ</label>
+                <input type="text" formControlName="memo">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
                 <label>開始日 *</label>
                 <input type="date" formControlName="startDate">
               </div>
@@ -206,7 +228,7 @@
                 </select>
               </div>
               <div class="form-group">
-                <label>優先度</label>
+                <label>重要度</label>
                 <select formControlName="priority">
                   <option value="important">重要</option>
                   <option value="normal">普通</option>
@@ -220,7 +242,7 @@
                 <label>担当者</label>
                 <select formControlName="assigneeId">
                   <option value="">選択しない</option>
-                  <option *ngFor="let user of users" [value]="user.id">
+                  <option *ngFor="let user of filteredAssigneeUsers" [value]="user.id">
                     {{ user.displayName || user.email }}
                   </option>
                 </select>
@@ -229,7 +251,7 @@
                 <label>プロジェクト</label>
                 <select formControlName="projectId">
                   <option value="">選択しない</option>
-                  <option *ngFor="let project of projects" [value]="project.id">
+                  <option *ngFor="let project of filteredProjects" [value]="project.id">
                     {{ project.name }}
                   </option>
                 </select>
@@ -291,7 +313,7 @@
 
         <div class="result-actions">
           <button class="btn btn-primary" (click)="reset()">新しいファイルをインポート</button>
-          <button class="btn btn-secondary" (click)="goBack()">ホームに戻る</button>
+          <button class="btn btn-secondary" (click)="goToHome()">ホームに戻る</button>
         </div>
       </div>
     </div>

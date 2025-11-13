@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "dist/taskmanagement10119-app",
+    "public": "dist/taskmanagement10119-app/browser",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -24,10 +24,6 @@
         "firebase-debug.log",
         "firebase-debug.*.log",
         "*.local"
-      ],
-      "predeploy": [
-        "npm --prefix \"$RESOURCE_DIR\" run lint",
-        "npm --prefix \"$RESOURCE_DIR\" run build"
       ]
     }
   ]

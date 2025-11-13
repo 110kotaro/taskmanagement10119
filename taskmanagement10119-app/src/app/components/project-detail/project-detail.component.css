@@ -159,6 +159,7 @@
   cursor: pointer;
   transition: all 0.3s;
   background: var(--color-surface);
+  color: var(--color-text);
 }
 
 .task-card:hover {

@@ -72,7 +72,7 @@ export class TaskImportComponent implements OnInit {
     { key: 'startTime', label: '開始時間', required: false },
     { key: 'endTime', label: '終了時間', required: false },
     { key: 'status', label: 'ステータス', required: false },
-    { key: 'priority', label: '優先度', required: false },
+    { key: 'priority', label: '重要度', required: false },
     { key: 'assigneeName', label: '担当者名', required: false },
     { key: 'projectName', label: 'プロジェクト名', required: false },
     { key: 'teamName', label: 'チーム名', required: false }
@@ -95,6 +95,10 @@ export class TaskImportComponent implements OnInit {
   projects: Project[] = [];
   teams: Team[] = [];
 
+  // フィルタリング用のリスト
+  filteredAssigneeUsers: User[] = [];
+  filteredProjects: Project[] = [];
+
   // サンプル表示関連
   showSample = false;
 
@@ -109,7 +113,7 @@ export class TaskImportComponent implements OnInit {
       終了日: '2024/01/20',
       終了時間: '18:00',
       ステータス: '未着手',
-      優先度: '重要',
+      重要度: '重要',
       担当者名: '山田太郎',
       プロジェクト名: 'プロジェクトA',
       チーム名: 'テストチーム'
@@ -123,7 +127,7 @@ export class TaskImportComponent implements OnInit {
       終了日: '2024/01/25',
       終了時間: '',
       ステータス: '進行中',
-      優先度: '普通',
+      重要度: '普通',
       担当者名: '',
       プロジェクト名: '',
       チーム名: '個人'
@@ -137,7 +141,7 @@ export class TaskImportComponent implements OnInit {
       終了日: '2024/01/30',
       終了時間: '17:00',
       ステータス: '未着手',
-      優先度: '低め',
+      重要度: '低め',
       担当者名: '佐藤花子',
       プロジェクト名: 'プロジェクトB',
       チーム名: ''
@@ -161,6 +165,14 @@ export class TaskImportComponent implements OnInit {
       assigneeId: [''],
       projectId: [''],
       teamName: ['']
+    });
+
+    // チーム名とプロジェクトIDの変更を監視してフィルタリング
+    this.editForm.get('teamName')?.valueChanges.subscribe(() => {
+      this.updateFilteredLists();
+    });
+    this.editForm.get('projectId')?.valueChanges.subscribe(() => {
+      this.updateFilteredLists();
     });
   }
 
@@ -214,6 +226,132 @@ export class TaskImportComponent implements OnInit {
       }
     } catch (error: any) {
       console.error('Error loading teams:', error);
+    }
+  }
+
+  // チーム名とプロジェクト名に基づいてフィルタリングされた担当者リストを取得（プレビュー時のバリデーション用）
+  getFilteredAssigneeUsersForValidation(teamName: string, projectName: string): User[] {
+    const user = this.authService.currentUser;
+    if (!user) {
+      return [];
+    }
+
+    const normalizedTeamName = this.normalizeEmptyValue(teamName);
+    const normalizedProjectName = this.normalizeEmptyValue(projectName);
+
+    // 個人タスクの場合：自分のみ
+    if (!normalizedTeamName || normalizedTeamName === '' || this.isPersonalTask(normalizedTeamName)) {
+      return this.users.filter(u => u.id === user.uid);
+    }
+
+    // チームタスクの場合
+    const team = this.teams.find(t => t.name === normalizedTeamName);
+    
+    if (normalizedProjectName) {
+      // プロジェクトが指定されている場合：プロジェクトメンバーのみ
+      const project = this.projects.find(p => p.name === normalizedProjectName);
+      if (project && project.members) {
+        const projectMemberIds = project.members.map(m => m.userId);
+        const filteredUsers = this.users.filter(u => projectMemberIds.includes(u.id));
+        // プロジェクトメンバーが0人の場合、自分のみ
+        return filteredUsers.length > 0 ? filteredUsers : this.users.filter(u => u.id === user.uid);
+      } else {
+        // プロジェクトが存在しない場合
+        if (team && team.members) {
+          // チームが存在する場合：チームメンバーのみ
+          const teamMemberIds = team.members.map(m => m.userId);
+          return this.users.filter(u => teamMemberIds.includes(u.id));
+        } else {
+          // チームが存在しない場合：自分のみ
+          return this.users.filter(u => u.id === user.uid);
+        }
+      }
+    } else {
+      // プロジェクトが指定されていない場合
+      if (team && team.members) {
+        // チームが存在する場合：チームメンバーのみ
+        const teamMemberIds = team.members.map(m => m.userId);
+        return this.users.filter(u => teamMemberIds.includes(u.id));
+      } else {
+        // チームが存在しない場合：自分のみ
+        return this.users.filter(u => u.id === user.uid);
+      }
+    }
+  }
+
+  updateFilteredLists() {
+    const user = this.authService.currentUser;
+    if (!user) {
+      this.filteredAssigneeUsers = [];
+      this.filteredProjects = [];
+      return;
+    }
+
+    const teamName = this.editForm.get('teamName')?.value || '';
+    const projectId = this.editForm.get('projectId')?.value || '';
+
+    // プロジェクトのフィルタリング
+    if (!teamName || teamName === '') {
+      // 個人タスクの場合：個人プロジェクトのみ
+      this.filteredProjects = this.projects.filter(p => !p.teamId || p.teamId === '');
+    } else {
+      // チームタスクの場合：チーム内プロジェクトのみ
+      const team = this.teams.find(t => t.name === teamName);
+      if (team) {
+        this.filteredProjects = this.projects.filter(p => p.teamId === team.id);
+      } else {
+        this.filteredProjects = [];
+      }
+    }
+
+    // 担当者のフィルタリング
+    if (!teamName || teamName === '') {
+      // 個人タスクの場合：自分のみ
+      this.filteredAssigneeUsers = this.users.filter(u => u.id === user.uid);
+    } else {
+      // チームタスクの場合
+      const team = this.teams.find(t => t.name === teamName);
+      
+      if (projectId) {
+        // プロジェクトが指定されている場合：プロジェクトメンバーのみ
+        const project = this.projects.find(p => p.id === projectId);
+        if (project && project.members) {
+          const projectMemberIds = project.members.map(m => m.userId);
+          this.filteredAssigneeUsers = this.users.filter(u => projectMemberIds.includes(u.id));
+          // プロジェクトメンバーが0人の場合、自分のみ
+          if (this.filteredAssigneeUsers.length === 0) {
+            this.filteredAssigneeUsers = this.users.filter(u => u.id === user.uid);
+          }
+        } else {
+          // プロジェクトが存在しない場合
+          if (team && team.members) {
+            // チームが存在する場合：チームメンバーのみ
+            const teamMemberIds = team.members.map(m => m.userId);
+            this.filteredAssigneeUsers = this.users.filter(u => teamMemberIds.includes(u.id));
+          } else {
+            // チームが存在しない場合：自分のみ
+            this.filteredAssigneeUsers = this.users.filter(u => u.id === user.uid);
+          }
+        }
+      } else {
+        // プロジェクトが指定されていない場合
+        if (team && team.members) {
+          // チームが存在する場合：チームメンバーのみ
+          const teamMemberIds = team.members.map(m => m.userId);
+          this.filteredAssigneeUsers = this.users.filter(u => teamMemberIds.includes(u.id));
+        } else {
+          // チームが存在しない場合：自分のみ
+          this.filteredAssigneeUsers = this.users.filter(u => u.id === user.uid);
+        }
+      }
+    }
+
+    // チームが「個人タスク」に変更された場合、担当者を自分のみに戻す
+    if (!teamName || teamName === '') {
+      const currentAssigneeId = this.editForm.get('assigneeId')?.value;
+      if (currentAssigneeId && currentAssigneeId !== user.uid) {
+        this.editForm.patchValue({ assigneeId: '' }, { emitEvent: false });
+      }
     }
   }
 
@@ -328,7 +466,7 @@ export class TaskImportComponent implements OnInit {
       'startTime': ['開始時間', 'starttime', 'start_time', '開始時刻'],
       'endTime': ['終了時間', 'endtime', 'end_time', '終了時刻'],
       'status': ['ステータス', 'status', '状態', '状況'],
-      'priority': ['優先度', 'priority', '優先', '重要度'],
+      'priority': ['重要度', 'priority', '優先', '優先度'],
       'assigneeName': ['担当者', '担当者名', 'assigneename', 'assignee_name', '担当', 'アサイン'],
       'projectName': ['プロジェクト', 'プロジェクト名', 'projectname', 'project_name'],
       'teamName': ['チーム', 'チーム名', 'teamname', 'team_name']
@@ -381,7 +519,13 @@ export class TaskImportComponent implements OnInit {
       mappings.forEach(mapping => {
         const value = row[mapping.columnIndex];
         const stringValue = value !== undefined && value !== null ? String(value) : '';
-        mappedData[mapping.field] = this.normalizeEmptyValue(stringValue);
+        
+        // 時刻フィールドの場合はnormalizeEmptyValueを適用しない（時刻形式を保持）
+        if (mapping.field === 'startTime' || mapping.field === 'endTime') {
+          mappedData[mapping.field] = stringValue.trim();
+        } else {
+          mappedData[mapping.field] = this.normalizeEmptyValue(stringValue);
+        }
       });
 
       // バリデーション
@@ -407,6 +551,22 @@ export class TaskImportComponent implements OnInit {
         }
       }
 
+      // 開始時間のバリデーション
+      if (mappedData['startTime'] && mappedData['startTime'] !== '') {
+        const startTime = this.parseTime(mappedData['startTime']);
+        if (!startTime) {
+          errors.push('開始時間の形式が不正です');
+        }
+      }
+
+      // 終了時間のバリデーション
+      if (mappedData['endTime'] && mappedData['endTime'] !== '') {
+        const endTime = this.parseTime(mappedData['endTime']);
+        if (!endTime) {
+          errors.push('終了時間の形式が不正です');
+        }
+      }
+
       // 開始日と終了日の比較
       if (mappedData['startDate'] && mappedData['endDate']) {
         const startDate = this.parseDate(mappedData['startDate']);
@@ -416,15 +576,23 @@ export class TaskImportComponent implements OnInit {
         }
       }
 
-      // 担当者名の存在チェック（正規化後なので既に空欄の場合はスキップ）
+      // 担当者名の存在チェック（手動修正時の条件に基づいてフィルタリング）
       if (mappedData['assigneeName'] && mappedData['assigneeName'] !== '') {
         const assigneeNameValue = mappedData['assigneeName'];
-        const user = this.users.find(u => 
+        const teamName = mappedData['teamName'] || '';
+        const projectName = mappedData['projectName'] || '';
+        
+        // フィルタリングされた担当者リストを取得
+        const filteredUsers = this.getFilteredAssigneeUsersForValidation(teamName, projectName);
+        
+        // フィルタリングされたリストから担当者を検索
+        const user = filteredUsers.find(u => 
           u.displayName === assigneeNameValue || 
           u.email === assigneeNameValue
         );
+        
         if (!user) {
-          errors.push(`担当者「${assigneeNameValue}」は存在しません`);
+          errors.push(`担当者「${assigneeNameValue}」は存在しないか、選択できません`);
           // 担当者名をクリア（担当者未設定にする）
           mappedData['assigneeName'] = '';
         }
@@ -602,7 +770,7 @@ export class TaskImportComponent implements OnInit {
     const row = this.importRows[actualIndex];
     this.editingRowIndex = actualIndex; // importRowsの実際のインデックスを保存
     
-    // 優先度の変換（日本語から英語に変換）
+    // 重要度の変換（日本語から英語に変換）
     let priorityValue = 'normal'; // デフォルト値
     if (row.mappedData['priority']) {
       const priorityStr = String(row.mappedData['priority']).toLowerCase();
@@ -668,20 +836,27 @@ export class TaskImportComponent implements OnInit {
       }
     }
     
+    // 時刻の値を取得（プレビューで読み込んだ時刻をそのまま使用）
+    const startTimeValue = row.mappedData['startTime'] ? String(row.mappedData['startTime']).trim() : '';
+    const endTimeValue = row.mappedData['endTime'] ? String(row.mappedData['endTime']).trim() : '';
+
     this.editForm.patchValue({
       title: row.mappedData['title'] || '',
       description: row.mappedData['description'] || '',
       memo: row.mappedData['memo'] || '',
       startDate: this.formatDateForInput(row.mappedData['startDate']),
-      startTime: row.mappedData['startTime'] || '',
+      startTime: startTimeValue,
       endDate: this.formatDateForInput(row.mappedData['endDate']),
-      endTime: row.mappedData['endTime'] || '',
+      endTime: endTimeValue,
       status: statusValue,
       priority: priorityValue,
       assigneeId: assigneeIdValue,
       projectId: projectIdValue,
       teamName: teamNameValue
-    });
+    }, { emitEvent: false }); // emitEvent: falseでvalueChangesの無限ループを防ぐ
+
+    // 初期フィルタリングを実行
+    this.updateFilteredLists();
   }
 
   saveRowEdit() {
@@ -727,12 +902,50 @@ export class TaskImportComponent implements OnInit {
       }
     }
 
+    // 開始時間のバリデーション
+    if (row.mappedData['startTime'] && row.mappedData['startTime'] !== '') {
+      const startTime = this.parseTime(row.mappedData['startTime']);
+      if (!startTime) {
+        row.errors.push('開始時間の形式が不正です');
+      }
+    }
+
+    // 終了時間のバリデーション
+    if (row.mappedData['endTime'] && row.mappedData['endTime'] !== '') {
+      const endTime = this.parseTime(row.mappedData['endTime']);
+      if (!endTime) {
+        row.errors.push('終了時間の形式が不正です');
+      }
+    }
+
     // 開始日と終了日の比較
     if (row.mappedData['startDate'] && row.mappedData['endDate']) {
       const startDate = this.parseDate(row.mappedData['startDate']);
       const endDate = this.parseDate(row.mappedData['endDate']);
       if (startDate && endDate && startDate > endDate) {
         row.errors.push('開始日が終了日より後です');
+      }
+    }
+
+    // 担当者名の存在チェック（手動修正時の条件に基づいてフィルタリング）
+    if (row.mappedData['assigneeName'] && row.mappedData['assigneeName'] !== '') {
+      const assigneeNameValue = row.mappedData['assigneeName'];
+      const teamName = row.mappedData['teamName'] || '';
+      const projectName = row.mappedData['projectName'] || '';
+      
+      // フィルタリングされた担当者リストを取得
+      const filteredUsers = this.getFilteredAssigneeUsersForValidation(teamName, projectName);
+      
+      // フィルタリングされたリストから担当者を検索
+      const user = filteredUsers.find(u => 
+        u.displayName === assigneeNameValue || 
+        u.email === assigneeNameValue
+      );
+      
+      if (!user) {
+        row.errors.push(`担当者「${assigneeNameValue}」は存在しないか、選択できません`);
+        // 担当者名をクリア（担当者未設定にする）
+        row.mappedData['assigneeName'] = '';
       }
     }
 
@@ -746,6 +959,9 @@ export class TaskImportComponent implements OnInit {
         }
       }
     }
+
+    // プロジェクト名の存在チェック（プレビュー段階ではエラーとして表示しないが、存在確認は行う）
+    // 実際のエラーチェックはインポート実行時にconfirmProjectActionで行う
 
     row.willImport = row.errors.length === 0;
     this.editingRowIndex = null;
@@ -924,7 +1140,7 @@ export class TaskImportComponent implements OnInit {
       }
     }
 
-    // 優先度の変換
+    // 重要度の変換
     let priority = PriorityLabel.Normal;
     if (mapped['priority']) {
       const priorityStr = String(mapped['priority']).toLowerCase();
@@ -1046,15 +1262,18 @@ export class TaskImportComponent implements OnInit {
             }
             
             if (action === 'create') {
-              // プロジェクトを作成
+              // プロジェクトを作成（チームプロジェクトとして）
               try {
-                const newProjectId = await this.projectService.createProject({
-                  name: projectNameValue,
-                  description: `インポート時に自動作成されたプロジェクト: ${projectNameValue}`,
-                  teamId: teamId,
-                  startDate: Timestamp.fromDate(startDate),
-                  endDate: Timestamp.fromDate(endDate)
-                });
+                const newProjectId = await this.projectService.createProject(
+                  {
+                    name: projectNameValue,
+                    description: `インポート時に自動作成されたプロジェクト: ${projectNameValue}`,
+                    startDate: Timestamp.fromDate(startDate),
+                    endDate: Timestamp.fromDate(endDate)
+                  },
+                  teamId,  // 第2引数としてteamIdを渡す
+                  teamName  // 第3引数としてteamNameを渡す
+                );
                 
                 // 作成したプロジェクトをリストに追加
                 project = {
@@ -1088,15 +1307,16 @@ export class TaskImportComponent implements OnInit {
             }
           }
         } else {
-          // 個人タスクの場合、既存のプロジェクトを検索
-          project = this.projects.find(p => p.name === projectNameValue);
+          // 個人タスクの場合、個人プロジェクト（teamIdが未設定）のみを検索
+          project = this.projects.find(p => p.name === projectNameValue && (!p.teamId || p.teamId === ''));
           
-          // プロジェクトが存在しない場合は自動作成
+          // プロジェクトが存在しない場合は自動作成（個人プロジェクトとして）
           if (!project) {
             try {
               const newProjectId = await this.projectService.createProject({
                 name: projectNameValue,
                 description: `インポート時に自動作成されたプロジェクト: ${projectNameValue}`,
+                // teamIdを設定しない（個人プロジェクトとして作成）
                 startDate: Timestamp.fromDate(startDate),
                 endDate: Timestamp.fromDate(endDate)
               });
@@ -1110,6 +1330,7 @@ export class TaskImportComponent implements OnInit {
                 ownerName: this.users.find(u => u.id === creatorId)?.displayName || 'Unknown',
                 members: [],
                 status: ProjectStatus.NotStarted,
+                // teamIdを設定しない（個人プロジェクト）
                 startDate: Timestamp.fromDate(startDate),
                 endDate: Timestamp.fromDate(endDate),
                 completionRate: 0,
@@ -1183,7 +1404,12 @@ export class TaskImportComponent implements OnInit {
         this.currentStep='upload';
       }
     }
-}
+  }
+
+  goToHome() {
+    // ホームに戻る
+    this.router.navigate(['/home']);
+  }
 
   toggleSample() {
     this.showSample = !this.showSample;

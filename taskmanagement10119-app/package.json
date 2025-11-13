@@ -8,8 +8,9 @@
     "build:prod": "ng build --configuration production",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
+    "build:functions": "cd functions && npm run build && cd ..",
     "deploy": "npm run build:prod && firebase deploy --only hosting",
-    "deploy:all": "npm run build:prod && firebase deploy"
+    "deploy:all": "npm run build:prod && npm run build:functions && firebase deploy"
   },
   "private": true,
   "dependencies": {

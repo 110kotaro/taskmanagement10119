@@ -53,9 +53,31 @@ export const checkReminders = functions.pubsub
           .get();
 
         // フィルタリング: 担当者が自分のタスク、またはチームタスクで担当者未割当で作成者が自分のタスク
-        const userTasks = tasksSnapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter((task: any) => {
+        type TaskType = {
+          id: string;
+          status?: string;
+          assigneeId?: string;
+          teamId?: string;
+          creatorId?: string;
+          reminders?: Array<{
+            id: string;
+            sent?: boolean;
+            scheduledAt?: admin.firestore.Timestamp;
+            type?: string;
+            amount?: number;
+            unit?: "minute" | "hour" | "day";
+            [key: string]: unknown;
+          }>;
+          startDate?: admin.firestore.Timestamp;
+          endDate?: admin.firestore.Timestamp;
+          title?: string;
+          projectId?: string;
+          [key: string]: unknown;
+        };
+
+        const userTasks: TaskType[] = tasksSnapshot.docs
+          .map((doc) => ({id: doc.id, ...doc.data()} as TaskType))
+          .filter((task: TaskType) => {
             // タスクが完了している場合はスキップ
             if (task.status === "completed") {
               return false;
@@ -65,7 +87,7 @@ export const checkReminders = functions.pubsub
               return true;
             }
             // チームタスクで担当者未割当で作成者が自分のタスク
-            if (task.teamId && (!task.assigneeId || task.assigneeId === '') && task.creatorId === userId) {
+            if (task.teamId && (!task.assigneeId || task.assigneeId === "") && task.creatorId === userId) {
               return true;
             }
             return false;
@@ -75,7 +97,15 @@ export const checkReminders = functions.pubsub
           const taskId = task.id;
 
           // リマインダーはタスク内の配列として保存されている
-          const reminders = task.reminders || [];
+          const reminders = (task.reminders || []) as Array<{
+            id: string;
+            sent?: boolean;
+            scheduledAt?: admin.firestore.Timestamp;
+            type?: string;
+            amount?: number;
+            unit?: string;
+            [key: string]: unknown;
+          }>;
 
           for (const reminder of reminders) {
             // 既に送信済みの場合はスキップ
@@ -102,6 +132,9 @@ export const checkReminders = functions.pubsub
               reminder.unit
             ) {
               // 相対リマインダー（開始前/期限前）
+              if (!task.startDate || !task.endDate) {
+                continue;
+              }
               const taskStartDate = task.startDate.toDate();
               const taskEndDate = task.endDate.toDate();
               let baseDate: Date;
@@ -115,9 +148,12 @@ export const checkReminders = functions.pubsub
               }
 
               // リマインダー時間を計算
+              if (!reminder.unit || (reminder.unit !== "minute" && reminder.unit !== "hour" && reminder.unit !== "day")) {
+                continue;
+              }
               const calculatedTime = calculateReminderTime(
                 baseDate,
-                reminder.amount,
+                reminder.amount || 0,
                 reminder.unit
               );
 
@@ -136,7 +172,7 @@ export const checkReminders = functions.pubsub
             if (shouldNotify) {
               // 通知メッセージを生成
               let message = "";
-              const taskTitle = task.title || "タスク";
+              const taskTitle = (task.title || "タスク") as string;
               if (reminder.type === "before_start") {
                 const timeStr = formatReminderTime(reminder);
                 message = `タスク「${taskTitle}」が開始予定時刻の${timeStr}前に近づいています`;
@@ -218,7 +254,7 @@ export const checkReminders = functions.pubsub
                   title: "タスクリマインダー",
                   message: message,
                   taskId: taskId,
-                  projectId: task.projectId || null,
+                  projectId: (task.projectId || null) as string | null,
                   isRead: false,
                   createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 });

@@ -87,6 +87,7 @@
   box-shadow: var(--shadow-md);
   cursor: pointer;
   transition: all 0.3s;
+  color:var(--color-text);
 }
 
 .project-card:hover {
