@@ -60,15 +60,6 @@
   flex-wrap: wrap;
 }
 
-.view-mode-toggle {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  background: rgba(255, 255, 255, 0.2);
-  padding: 0.5rem;
-  border-radius: var(--border-radius);
-}
-
 .mode-btn {
   padding: 0.5rem 1rem;
   background: rgba(255, 255, 255, 0.1);
@@ -88,84 +79,6 @@
   background: white;
   color: var(--color-primary);
   font-weight: 600;
-}
-
-.team-select {
-  padding: 0.5rem;
-  background: white;
-  color: var(--color-text);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: var(--border-radius);
-  font-size: var(--font-size-base);
-  cursor: pointer;
-}
-
-.notifications-btn {
-  position: relative;
-  background: rgba(255, 255, 255, 0.2) !important;
-  color: white !important;
-  border: 1px solid white !important;
-}
-
-.notifications-btn:hover {
-  background: rgba(255, 255, 255, 0.3) !important;
-}
-
-.badge {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  background: var(--color-error);
-  color: white;
-  border-radius: 50%;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--font-size-sm);
-  font-weight: bold;
-}
-
-.gantt-btn {
-  background: rgba(255, 255, 255, 0.2) !important;
-  color: white !important;
-  border: 1px solid white !important;
-}
-
-.gantt-btn:hover {
-  background: rgba(255, 255, 255, 0.3) !important;
-}
-
-
-.statistics-btn {
-  background: rgba(255, 255, 255, 0.2) !important;
-  color: white !important;
-  border: 1px solid white !important;
-}
-
-.statistics-btn:hover {
-  background: rgba(255, 255, 255, 0.3) !important;
-}
-
-.task-list-btn {
-  background: rgba(255, 255, 255, 0.2) !important;
-  color: white !important;
-  border: 1px solid white !important;
-}
-
-.task-list-btn:hover {
-  background: rgba(255, 255, 255, 0.3) !important;
-}
-
-.projects-btn {
-  background: rgba(255, 255, 255, 0.2) !important;
-  color: white !important;
-  border: 1px solid white !important;
-}
-
-.projects-btn:hover {
-  background: rgba(255, 255, 255, 0.3) !important;
 }
 
 .header button {
@@ -413,11 +326,6 @@
 .status-completed {
   background: #e8f5e9;
   color: #388e3c;
-}
-
-.status-overdue {
-  background: #ffebee;
-  color: #c62828;
 }
 
 .due-date {

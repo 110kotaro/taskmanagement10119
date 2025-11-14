@@ -36,6 +36,7 @@ export interface Notification {
   teamId?: string;
   invitationId?: string; // チーム招待ID
   checkType?: 'startDate' | 'endDate' | 'completion' | 'projectEndDate'; // 日付チェックの種類（TaskOverdue/Project日付チェック通知用）
+  reminderId?: string; // リマインダーID（TaskReminder通知用）
   isRead: boolean;
   readAt?: Timestamp;
   createdAt: Timestamp;

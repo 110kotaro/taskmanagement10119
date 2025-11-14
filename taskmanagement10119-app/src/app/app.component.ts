@@ -524,17 +524,30 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!user) return;
 
     try {
+      // チームタスクで担当者未割当の場合は作成者に通知、それ以外は担当者（または現在のユーザー）に通知
+      const notificationUserId = (task.teamId && (!task.assigneeId || task.assigneeId === '')) 
+        ? task.creatorId 
+        : (task.assigneeId || user.uid);
+
+      // 既存の通知をチェック（重複防止）
+      const existingNotification = await this.notificationService.getExistingDateCheckNotification(
+        notificationUserId,
+        task.id,
+        checkType
+      );
+
+      if (existingNotification) {
+        // 既に通知が存在する場合は作成しない
+        console.log(`[日付チェック] 既に通知が存在するため、スキップします (タスク: ${task.title}, checkType: ${checkType}, 通知ID: ${existingNotification.id})`);
+        return;
+      }
+
       const title = checkType === 'startDate' 
         ? 'タスクの開始日が過ぎています'
         : 'タスクの期限が過ぎています';
       const message = checkType === 'startDate'
         ? `タスク「${task.title}」の開始日が過ぎています。ステータスを変更してください。`
         : `タスク「${task.title}」の期限が過ぎています。ステータスを変更するか、期限を延長してください。`;
-
-      // チームタスクで担当者未割当の場合は作成者に通知、それ以外は担当者（または現在のユーザー）に通知
-      const notificationUserId = (task.teamId && (!task.assigneeId || task.assigneeId === '')) 
-        ? task.creatorId 
-        : (task.assigneeId || user.uid);
 
       const notificationId = await this.notificationService.createNotification({
         userId: notificationUserId,

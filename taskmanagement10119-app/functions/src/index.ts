@@ -13,10 +13,14 @@ import * as admin from "firebase-admin";
 admin.initializeApp();
 
 // リマインダーチェック関数（1分ごとに実行）
-export const checkReminders = functions.pubsub
+// maxInstances: 1を設定して、同時実行インスタンス数を1つに制限（重複実行を防ぐ）
+export const checkReminders = functions
+  .runWith({ maxInstances: 1 })
+  .pubsub
   .schedule("every 1 minutes")
   .timeZone("Asia/Tokyo")
   .onRun(async () => {
+    console.log(`[checkReminders] Function execution started at ${new Date().toISOString()}`);
     const db = admin.firestore();
     const now = admin.firestore.Timestamp.now();
 
@@ -108,10 +112,12 @@ export const checkReminders = functions.pubsub
           }>;
 
           for (const reminder of reminders) {
-            // 既に送信済みの場合はスキップ
-            if (reminder.sent) {
-              continue;
-            }
+            // reminder.sentのチェックはトランザクション内で行うため、ここでは削除
+            // これにより、複数のトランザクションが同時に開始されることを防ぐ
+            
+            console.log(
+              `[checkReminders] Processing reminder: userId=${userId}, taskId=${taskId}, reminderId=${reminder.id}, sent=${reminder.sent}`
+            );
 
             let shouldNotify = false;
 
@@ -188,83 +194,248 @@ export const checkReminders = functions.pubsub
               const reminderEnabled = notificationSettings.reminder !== false;
               const taskReminderEnabled = notificationSettings.taskReminder !== false;
               const shouldCreateNotification = reminderEnabled && taskReminderEnabled;
+              
+              // 通知レコード作成条件：お知らせまたはWebPushのどちらかが有効なら作成
+              // WebPushのみ通知の場合でも、webPushSentフラグを管理するために通知レコードが必要
+              const shouldCreateNotificationRecord = shouldCreateNotification || shouldSendReminderWebPush;
 
-              // WebPush通知を送信（設定が有効な場合のみ）
-              if (shouldSendReminderWebPush) {
-                const fcmMessage = {
-                  notification: {
-                    title: "タスクリマインダー",
-                    body: message,
-                  },
-                  data: {
-                    taskId: taskId,
-                    type: "task_reminder",
-                    url: `/task/${taskId}`,
-                  },
-                  token: fcmToken,
-                };
+              // 既存の通知チェックはトランザクション内で行うため、ここでは削除
+              // これにより、複数のトランザクションが同時に開始されることを防ぐ
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              
+              // 通知レコードのドキュメントIDをreminderIdベースで生成（重複防止）
+              // トランザクション外でも使用するため、ここで定義
+              const year = today.getFullYear();
+              const month = String(today.getMonth() + 1).padStart(2, '0');
+              const day = String(today.getDate()).padStart(2, '0');
+              const todayStr = `${year}-${month}-${day}`;
+              const notificationId = `${userId}_${taskId}_${reminder.id}_${todayStr}`;
+              const notificationRef = db.collection("notifications").doc(notificationId);
 
-                try {
+              // トランザクションで通知レコード作成とreminder.sentの更新を同時に行う
+              console.log(
+                `[checkReminders] Starting transaction: userId=${userId}, taskId=${taskId}, reminderId=${reminder.id}`
+              );
+              let notificationCreated = false;
+              let webPushUpdateNeeded = false; // WebPush送信が必要かどうか（トランザクション内で設定）
+              try {
+                await db.runTransaction(async (transaction) => {
+                  const taskRef = db.collection("tasks").doc(taskId);
+                  const taskDoc = await transaction.get(taskRef);
+                  
+                  if (!taskDoc.exists) {
+                    throw new Error(`Task ${taskId} does not exist`);
+                  }
+
+                  const taskData = taskDoc.data();
+                  const currentReminders = (taskData?.reminders || []) as Array<{
+                    id: string;
+                    sent?: boolean;
+                    [key: string]: unknown;
+                  }>;
+
+                  // 現在のreminderの状態を確認
+                  const currentReminder = currentReminders.find((r) => r.id === reminder.id);
+                  if (currentReminder?.sent) {
+                    // 既に送信済みの場合は何もしない
+                    console.log(
+                      `[checkReminders] Reminder already sent (transaction check) (ユーザー: ${userId}, タスク: ${taskId}, リマインダーID: ${reminder.id})`
+                    );
+                    return;
+                  }
+
+                  // 固定IDでの存在確認を最初に実行（reminder.sentの更新より前）
+                  // トランザクション内で存在確認
+                  const notificationDoc = await transaction.get(notificationRef);
+                  
+                  if (notificationDoc.exists) {
+                    // 既に存在する場合は、webPushSentフラグをチェック
+                    const existingWebPushSent = notificationDoc.data()?.webPushSent === true;
+                    
+                    // webPushSentがfalseで、WebPush送信が必要な場合のみ、trueに更新（WebPush送信の権利を取得）
+                    if (!existingWebPushSent && shouldSendReminderWebPush) {
+                      transaction.update(notificationRef, {
+                        webPushSent: true,
+                      });
+                      // トランザクションが成功した場合、トランザクション外でWebPushを送信する
+                      // webPushUpdateNeededフラグを設定して、トランザクション外でWebPush送信を実行
+                      webPushUpdateNeeded = true;
+                    }
+                    
+                    console.log(
+                      `[checkReminders] Notification already exists (transaction check) (ユーザー: ${userId}, タスク: ${taskId}, リマインダーID: ${reminder.id}, webPushSent: ${existingWebPushSent})`
+                    );
+                    // reminder.sentをtrueにマーク（次回のチェックでスキップされるように）
+                    const updatedReminders = currentReminders.map((r) => {
+                      if (r.id === reminder.id) {
+                        // sentAtを明示的に削除してから新しい値を設定
+                        const {sentAt, ...rest} = r;
+                        return {
+                          ...rest,
+                          sent: true,
+                          sentAt: admin.firestore.Timestamp.now(),
+                        };
+                      }
+                      // 他のリマインダーは、sentAtがTimestampインスタンスの場合は保持、それ以外は削除
+                      if (r.sentAt && r.sentAt instanceof admin.firestore.Timestamp) {
+                        // Timestampインスタンスの場合は保持
+                        return r;
+                      }
+                      // Timestampインスタンスでない場合は削除（FieldValue.serverTimestamp()などを除去）
+                      const {sentAt, ...rest} = r;
+                      return rest;
+                    });
+                    transaction.update(taskRef, {
+                      reminders: updatedReminders,
+                    });
+                    
+                    return;
+                  }
+
+                  // リマインダーを送信済みにマーク
+                  const updatedReminders = currentReminders.map((r) => {
+                    if (r.id === reminder.id) {
+                      // sentAtを明示的に削除してから新しい値を設定
+                      const {sentAt, ...rest} = r;
+                      return {
+                        ...rest,
+                        sent: true,
+                        sentAt: admin.firestore.Timestamp.now(),
+                      };
+                    }
+                    // 他のリマインダーは、sentAtがTimestampインスタンスの場合は保持、それ以外は削除
+                    if (r.sentAt && r.sentAt instanceof admin.firestore.Timestamp) {
+                      // Timestampインスタンスの場合は保持
+                      return r;
+                    }
+                    // Timestampインスタンスでない場合は削除（FieldValue.serverTimestamp()などを除去）
+                    const {sentAt, ...rest} = r;
+                    return rest;
+                  });
+
+                  // タスクを更新（reminder.sentをtrueに）
+                  transaction.update(taskRef, {
+                    reminders: updatedReminders,
+                  });
+
+                  // Firestoreに通知レコードを作成（お知らせまたはWebPushのどちらかが有効な場合）
+                  if (shouldCreateNotificationRecord) {
+                    // transaction.create()を使用（存在する場合はエラーになるため、重複を防げる）
+                    // トランザクション内での存在確認で既にチェックしているが、
+                    // 複数のトランザクションが同時に実行された場合の最終的な防御として使用
+                    console.log(
+                      `[checkReminders] Attempting to create notification: userId=${userId}, taskId=${taskId}, reminderId=${reminder.id}, notificationId=${notificationId}`
+                    );
+                    
+                    // 新規作成時はwebPushSentを設定
+                    // WebPush送信が必要な場合はtrueに設定（トランザクション内でアトミックに更新）
+                    // これにより、複数のインスタンスが同時に実行されても、1つだけがWebPush送信権を取得できる
+                    transaction.create(notificationRef, {
+                      userId: userId,
+                      type: "task_reminder",
+                      title: "タスクリマインダー",
+                      message: message,
+                      taskId: taskId,
+                      projectId: (task.projectId || null) as string | null,
+                      reminderId: reminder.id,
+                      isRead: false,
+                      webPushSent: shouldSendReminderWebPush, // WebPush送信が必要な場合はtrueに設定
+                      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    });
+
+                    notificationCreated = true;
+                    // WebPush送信が必要な場合、トランザクション外でWebPushを送信する
+                    if (shouldSendReminderWebPush) {
+                      webPushUpdateNeeded = true;
+                    }
+                    console.log(
+                      `[checkReminders] Reminder notification created (transaction) for user ${userId} for task ${taskId} (reminderId: ${reminder.id}, notificationId: ${notificationId})`
+                    );
+                  } else {
+                    console.log(
+                      `[checkReminders] Notification record skipped for user ${userId} (settings disabled)`
+                    );
+                  }
+                });
+              } catch (error: unknown) {
+                // transaction.create()が既に存在するドキュメントに対して実行された場合、
+                // トランザクション全体がロールバックされる
+                // これは正常な動作で、重複を防ぐためのもの
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                if (errorMessage.includes("already exists") || errorMessage.includes("ALREADY_EXISTS")) {
                   console.log(
-                    `[checkReminders] 送信するFCMトークン: ${fcmToken}`
+                    `[checkReminders] Notification already exists (transaction rollback) (ユーザー: ${userId}, タスク: ${taskId}, リマインダーID: ${reminder.id})`
                   );
-                  await admin.messaging().send(fcmMessage);
-                  console.log(
-                    `[checkReminders] WebPush reminder sent to user ${userId} for task ${taskId}`
-                  );
-                } catch (error) {
+                  // エラーを無視（重複を防ぐための正常な動作）
+                  notificationCreated = false;
+                } else {
+                  // その他のエラーは再スロー
                   console.error(
-                    `[checkReminders] Error sending WebPush reminder to user ${userId}:`,
+                    `[checkReminders] Transaction error (not already exists): userId=${userId}, taskId=${taskId}, reminderId=${reminder.id}`,
                     error
                   );
+                  throw error;
                 }
+              }
+
+              console.log(
+                `[checkReminders] Transaction completed: userId=${userId}, taskId=${taskId}, reminderId=${reminder.id}, notificationCreated=${notificationCreated}`
+              );
+
+              // トランザクション完了後、WebPush通知を送信（設定が有効な場合のみ）
+              // トランザクション内でwebPushSentフラグをtrueに更新した場合のみ送信
+              // トランザクション外でwebPushSentフラグを再確認して、重複送信を防ぐ
+              if (shouldSendReminderWebPush && webPushUpdateNeeded) {
+                // トランザクション外でwebPushSentフラグを再確認
+                const notificationDoc = await db.collection("notifications").doc(notificationId).get();
+                const webPushSent = notificationDoc.exists 
+                  ? (notificationDoc.data()?.webPushSent === true)
+                  : false;
+                
+                if (webPushSent) {
+                  console.log(
+                    `[checkReminders] WebPush reminder already sent (duplicate check) for user ${userId} for task ${taskId} (reminderId: ${reminder.id})`
+                  );
+                } else {
+                  const fcmMessage = {
+                    notification: {
+                      title: "タスクリマインダー",
+                      body: message,
+                    },
+                    data: {
+                      taskId: taskId,
+                      type: "task_reminder",
+                      url: `/task/${taskId}`,
+                    },
+                    token: fcmToken,
+                  };
+
+                  try {
+                    console.log(
+                      `[checkReminders] 送信するFCMトークン: ${fcmToken}`
+                    );
+                    await admin.messaging().send(fcmMessage);
+                    
+                    console.log(
+                      `[checkReminders] WebPush reminder sent to user ${userId} for task ${taskId} (reminderId: ${reminder.id})`
+                    );
+                  } catch (error) {
+                    console.error(
+                      `[checkReminders] Error sending WebPush reminder to user ${userId}:`,
+                      error
+                    );
+                    // エラーが発生した場合、webPushSentフラグをfalseに戻す（再送信可能にする）
+                    // ただし、これはオプションで、エラーが発生してもフラグはtrueのままにしておくことも可能
+                  }
+                }
+              } else if (shouldSendReminderWebPush && !webPushUpdateNeeded) {
+                console.log(
+                  `[checkReminders] WebPush reminder skipped for user ${userId} (already sent or webPushUpdateNeeded is false)`
+                );
               } else {
                 console.log(
                   `[checkReminders] WebPush reminder skipped for user ${userId} (settings disabled)`
-                );
-              }
-
-              // リマインダーを送信済みにマーク
-              const updatedReminders = reminders.map((r: {
-                id: string;
-                sent?: boolean;
-                sentAt?: admin.firestore.Timestamp;
-                [key: string]: unknown;
-              }) => {
-                if (r.id === reminder.id) {
-                  return {
-                    ...r,
-                    sent: true,
-                    sentAt: admin.firestore.FieldValue.serverTimestamp(),
-                  };
-                }
-                return r;
-              });
-
-              // タスクを更新
-              await db.collection("tasks").doc(taskId).update({
-                reminders: updatedReminders,
-              });
-
-              // Firestoreに通知レコードを作成（お知らせ欄への通知設定が有効な場合のみ）
-              if (shouldCreateNotification) {
-                await db.collection("notifications").add({
-                  userId: userId,
-                  type: "task_reminder",
-                  title: "タスクリマインダー",
-                  message: message,
-                  taskId: taskId,
-                  projectId: (task.projectId || null) as string | null,
-                  isRead: false,
-                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                });
-
-                console.log(
-                  `[checkReminders] Reminder notification created for user ${userId} for task ${taskId}`
-                );
-              } else {
-                console.log(
-                  `[checkReminders] Notification record skipped for user ${userId} (settings disabled)`
                 );
               }
             }

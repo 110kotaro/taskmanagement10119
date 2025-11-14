@@ -102,6 +102,23 @@
   border-color: var(--color-primary);
 }
 
+/* datetime-localのカレンダーアイコンをダークモード対応 */
+.form-group input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+/* ダークモード時にカレンダーアイコンを反転 */
+@media (prefers-color-scheme: dark) {
+  .form-group input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+}
+
+[data-theme="dark"] .form-group input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
 .selected-project-info {
   padding: 0.75rem;
   background: var(--color-background);

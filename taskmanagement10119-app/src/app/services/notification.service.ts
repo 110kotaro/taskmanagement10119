@@ -156,6 +156,54 @@ export class NotificationService {
     }
   }
 
+  // 既存の日付チェック通知を取得（重複チェック用）
+  async getExistingDateCheckNotification(
+    userId: string,
+    taskId: string,
+    checkType: 'startDate' | 'endDate'
+  ): Promise<Notification | null> {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const todayStart = Timestamp.fromDate(today);
+      const tomorrowStart = Timestamp.fromDate(tomorrow);
+      
+      // 同じuserId、taskId、checkType、type（TaskOverdue）、今日作成された、削除されていない通知を検索
+      const notificationQuery = query(
+        collection(db, 'notifications'),
+        where('userId', '==', userId),
+        where('taskId', '==', taskId),
+        where('checkType', '==', checkType),
+        where('type', '==', NotificationType.TaskOverdue),
+        where('createdAt', '>=', todayStart),
+        where('createdAt', '<', tomorrowStart)
+      );
+      
+      const snapshot = await getDocs(notificationQuery);
+      
+      // 削除されていない通知を探す
+      for (const docSnap of snapshot.docs) {
+        const notification = {
+          id: docSnap.id,
+          ...docSnap.data()
+        } as Notification;
+        
+        if (notification.isDeleted !== true) {
+          return notification;
+        }
+      }
+      
+      return null;
+    } catch (error: any) {
+      console.error('Error getting existing date check notification:', error);
+      // エラーが発生した場合は、既存の通知がないとみなしてnullを返す（通知作成を許可）
+      return null;
+    }
+  }
+
   async getNotifications(userId: string, userTeamIds: string[] = [], includeDeleted: boolean = false): Promise<Notification[]> {
     try {
       let notifications: Notification[] = [];
